@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
   const userId = await getOrCreateGuestUserId();
 
   const conversation = body.conversationId
-    ? await prisma.aiConversation.findUnique({ where: { id: body.conversationId } })
-    : await prisma.aiConversation.create({
+    ? await prisma.aIConversation.findUnique({ where: { id: body.conversationId } })
+    : await prisma.aIConversation.create({
         data: {
           userId,
           title: message.slice(0, 80),
