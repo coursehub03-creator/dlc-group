@@ -1,0 +1,1 @@
+export default function Page(){return <section className="mx-auto max-w-md p-8"><h1 className="text-2xl font-semibold">forgot-password</h1><p className="text-slate-600">Authentication view: forgot-password</p></section>}

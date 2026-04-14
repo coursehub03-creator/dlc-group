@@ -1,0 +1,1 @@
+-- Initial migration placeholder. Run `npx prisma migrate dev` to generate environment-specific SQL.
