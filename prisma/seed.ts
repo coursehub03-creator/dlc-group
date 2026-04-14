@@ -1,4 +1,4 @@
-import { PrismaClient, RoleType } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -15,7 +15,7 @@ async function main() {
   await prisma.user.upsert({
     where: { email: "admin@dlcgroup.online" },
     update: {},
-    create: { email: "admin@dlcgroup.online", name: "DLC Admin", role: RoleType.ADMIN }
+    create: { email: "admin@dlcgroup.online", name: "DLC Admin", role: Prisma.RoleType.ADMIN }
   });
 
   await prisma.blogPost.createMany({
