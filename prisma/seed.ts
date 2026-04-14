@@ -15,7 +15,7 @@ async function main() {
   await prisma.user.upsert({
     where: { email: "admin@dlcgroup.online" },
     update: {},
-    create: { email: "admin@dlcgroup.online", name: "DLC Admin", role: Prisma."ADMIN" }
+    create: { email: "admin@dlcgroup.online", name: "DLC Admin", role: "ADMIN" }
   });
 
   await prisma.blogPost.createMany({
