@@ -1,28 +1,25 @@
 import OpenAI from "openai";
-import { baseSystemPrompt, categoryTone } from "@/config/ai-prompts";
-import { formatKnowledgeContext, retrieveRelevantLegalKnowledge } from "@/lib/ai/legal-knowledge";
 
-export const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
+});
 
-export async function streamLegalResponse(input: {
-  message: string;
-  category: string;
-  locale: "ar" | "en";
-}) {
-  const snippets = await retrieveRelevantLegalKnowledge({
-    message: input.message,
-    category: input.category,
-    locale: input.locale
-  });
-
-  const prompt = `${baseSystemPrompt}\nCategory tone: ${categoryTone[input.category] ?? "Professional"}\nLanguage: ${input.locale}\nKnowledge context:\n${formatKnowledgeContext(snippets)}`;
-
-  return client.chat.completions.create({
-    model: "gpt-4.1-mini",
-    stream: true,
+export async function streamLegalResponse({ message, category, locale }) {
+  const completion = await openai.chat.completions.create({
+    model: "openai/gpt-4o-mini", // مهم
     messages: [
-      { role: "system", content: prompt },
-      { role: "user", content: input.message }
-    ]
+      {
+        role: "system",
+        content: "You are a helpful legal assistant.",
+      },
+      {
+        role: "user",
+        content: message,
+      },
+    ],
+    stream: true,
   });
+
+  return completion;
 }
