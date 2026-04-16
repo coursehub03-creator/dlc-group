@@ -4,8 +4,27 @@ import { prisma } from "@/lib/db/prisma";
 import { signInSchema } from "@/lib/validators/auth";
 import { verifyPassword } from "@/lib/auth/password";
 
+function getFirstNonEmptyEnv(...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+
+  return undefined;
+}
+
+const authSecret = getFirstNonEmptyEnv("AUTH_SECRET", "NEXTAUTH_SECRET");
+const authBaseUrl = getFirstNonEmptyEnv("AUTH_URL", "NEXTAUTH_URL");
+if (!authSecret) {
+  console.error("[auth] Missing auth secret. Set AUTH_SECRET or NEXTAUTH_SECRET.");
+}
+
+if (process.env.NODE_ENV === "production" && !authBaseUrl) {
+  console.warn("[auth] Missing AUTH_URL/NEXTAUTH_URL in production. Host header fallback is enabled via trustHost.");
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
   trustHost: true,
   session: { strategy: "jwt" },
   pages: {
@@ -20,16 +39,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       authorize: async (credentials) => {
         const parsed = signInSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+
+        if (!parsed.success) {
+          return null;
+        }
+
+        const email = parsed.data.email.toLowerCase();
 
         const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email.toLowerCase() }
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            passwordHash: true
+          }
         });
 
-        if (!user?.passwordHash) return null;
+        if (!user?.passwordHash) {
+          return null;
+        }
 
         const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
-        if (!validPassword) return null;
+
+        if (!validPassword) {
+          return null;
+        }
 
         return {
           id: user.id,
@@ -42,7 +78,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     jwt: async ({ token, user }) => {
-      if (user) token.role = (user as { role?: string }).role ?? "CLIENT";
+      if (user) {
+        token.role = (user as { role?: string }).role ?? "CLIENT";
+      }
+
       return token;
     },
     session: async ({ session, token }) => {
@@ -50,7 +89,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         (session.user as { id?: string; role?: string }).id = token.sub;
         (session.user as { id?: string; role?: string }).role = String(token.role ?? "CLIENT");
       }
+
       return session;
+    },
+    redirect: async ({ url, baseUrl }) => {
+      if (url.startsWith("/")) {
+        return url;
+      }
+
+      if (url.startsWith(baseUrl)) {
+        return url;
+      }
+
+      return `${baseUrl}/client/dashboard`;
     }
   }
 });
