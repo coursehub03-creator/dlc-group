@@ -93,15 +93,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     redirect: async ({ url, baseUrl }) => {
-      if (url.startsWith("/")) {
-        return url;
-      }
+      const dashboardUrl = `${baseUrl}/client/dashboard`;
 
-      if (url.startsWith(baseUrl)) {
-        return url;
-      }
+      try {
+        if (url.startsWith("/")) {
+          return new URL(url, baseUrl).toString();
+        }
 
-      return `${baseUrl}/client/dashboard`;
+        const parsed = new URL(url);
+        return parsed.origin === new URL(baseUrl).origin ? parsed.toString() : dashboardUrl;
+      } catch {
+        return dashboardUrl;
+      }
     }
   }
 });
