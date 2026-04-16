@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
 import { brand } from "@/config/brand";
+import { AuthSessionProvider } from "@/components/providers/session-provider";
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${brand.domain}`),
@@ -12,7 +13,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthSessionProvider>{children}</AuthSessionProvider>
+      </body>
     </html>
   );
 }
