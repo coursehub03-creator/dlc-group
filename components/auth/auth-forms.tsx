@@ -180,7 +180,17 @@ export function SignInForm() {
 
   const callbackUrl = useMemo(() => {
     const requested = searchParams.get("callbackUrl");
-    return requested && requested.startsWith("/") ? requested : "/client/dashboard";
+    if (!requested) return "/client/dashboard";
+
+    if (requested.startsWith("/")) return requested;
+
+    try {
+      const parsed = new URL(requested, window.location.origin);
+      if (parsed.origin !== window.location.origin) return "/client/dashboard";
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+      return "/client/dashboard";
+    }
   }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -220,7 +230,7 @@ export function SignInForm() {
       return;
     }
 
-    router.push(result.url ?? callbackUrl);
+    router.push(result.url || "/client/dashboard");
     router.refresh();
   }
 
