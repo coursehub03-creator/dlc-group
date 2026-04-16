@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/layout/logo";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
@@ -20,16 +21,35 @@ const navItems = {
   ]
 } as const;
 
+const authActions = {
+  en: {
+    signIn: "Sign In",
+    signUp: "Create Account",
+    dashboard: "Dashboard",
+    logout: "Logout"
+  },
+  ar: {
+    signIn: "تسجيل الدخول",
+    signUp: "إنشاء حساب",
+    dashboard: "لوحة التحكم",
+    logout: "تسجيل الخروج"
+  }
+} as const;
+
 export function SiteShellClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const params = useSearchParams();
+  const { status } = useSession();
   const locale = params.get("lang") === "ar" ? "ar" : "en";
   const dir = locale === "ar" ? "rtl" : "ltr";
+  const t = authActions[locale];
+
+  const withLocale = (href: string) => `${href}?lang=${locale}`;
 
   return (
     <div dir={dir} className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-40 border-b border-white/20 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 md:px-8">
           <Logo />
           <nav className="hidden items-center gap-7 text-sm font-medium md:flex">
             {navItems[locale].map((item) => {
@@ -37,7 +57,7 @@ export function SiteShellClient({ children }: { children: React.ReactNode }) {
               return (
                 <Link
                   key={item.href}
-                  href={`${item.href}?lang=${locale}`}
+                  href={withLocale(item.href)}
                   className={`transition-colors ${active ? "text-navy" : "text-slate-600 hover:text-navy"}`}
                 >
                   {item.label}
@@ -45,7 +65,40 @@ export function SiteShellClient({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            {status === "authenticated" ? (
+              <>
+                <Link
+                  href={withLocale("/client/dashboard")}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-navy hover:text-navy"
+                >
+                  {t.dashboard}
+                </Link>
+                <button
+                  onClick={() => signOut({ callbackUrl: withLocale("/") })}
+                  className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                >
+                  {t.logout}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href={withLocale("/auth/sign-in")}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-navy hover:text-navy"
+                >
+                  {t.signIn}
+                </Link>
+                <Link
+                  href={withLocale("/auth/sign-up")}
+                  className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                >
+                  {t.signUp}
+                </Link>
+              </>
+            )}
+            <LanguageSwitcher />
+          </div>
         </div>
       </header>
       <main>{children}</main>

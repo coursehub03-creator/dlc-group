@@ -5,9 +5,12 @@ import { signInSchema } from "@/lib/validators/auth";
 import { verifyPassword } from "@/lib/auth/password";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
-    signIn: "/auth/sign-in"
+    signIn: "/auth/sign-in",
+    error: "/auth/error"
   },
   providers: [
     Credentials({
@@ -43,8 +46,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     session: async ({ session, token }) => {
-      (session.user as { id?: string; role?: string }).id = token.sub;
-      (session.user as { id?: string; role?: string }).role = String(token.role ?? "CLIENT");
+      if (session.user) {
+        (session.user as { id?: string; role?: string }).id = token.sub;
+        (session.user as { id?: string; role?: string }).role = String(token.role ?? "CLIENT");
+      }
       return session;
     }
   }
