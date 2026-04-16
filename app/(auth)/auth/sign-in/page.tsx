@@ -1,1 +1,10 @@
-export default function Page(){return <section className="mx-auto max-w-md p-8"><h1 className="text-2xl font-semibold">sign-in</h1><p className="text-slate-600">Authentication view: sign-in</p></section>}
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { SignInForm } from "@/components/auth/auth-forms";
+
+export default function Page() {
+  return (
+    <AuthLayout title="Welcome back" subtitle="Sign in to access your secure client legal workspace.">
+      <SignInForm />
+    </AuthLayout>
+  );
+}
