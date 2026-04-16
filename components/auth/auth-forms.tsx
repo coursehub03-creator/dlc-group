@@ -180,8 +180,8 @@ export function SignInForm() {
 
   const callbackUrl = useMemo(() => {
     const requested = searchParams.get("callbackUrl");
-    return requested && requested.startsWith("/") ? requested : withLang("/client/dashboard", locale);
-  }, [locale, searchParams]);
+    return requested && requested.startsWith("/") ? requested : "/client/dashboard";
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

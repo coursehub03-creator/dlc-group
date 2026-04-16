@@ -13,11 +13,27 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   const [algorithm, saltHex, hashHex] = hash.split(":");
-  if (algorithm !== "scrypt" || !saltHex || !hashHex) return false;
 
-  const salt = Buffer.from(saltHex, "hex");
-  const storedHash = Buffer.from(hashHex, "hex");
-  const derivedKey = (await scrypt(password, salt, storedHash.length)) as Buffer;
+  if (algorithm !== "scrypt" || !saltHex || !hashHex) {
+    return false;
+  }
 
-  return timingSafeEqual(storedHash, derivedKey);
+  try {
+    const salt = Buffer.from(saltHex, "hex");
+    const storedHash = Buffer.from(hashHex, "hex");
+
+    if (storedHash.length === 0 || salt.length === 0) {
+      return false;
+    }
+
+    const derivedKey = (await scrypt(password, salt, storedHash.length)) as Buffer;
+
+    if (derivedKey.length !== storedHash.length) {
+      return false;
+    }
+
+    return timingSafeEqual(storedHash, derivedKey);
+  } catch {
+    return false;
+  }
 }
