@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { forgotPasswordSchema, resetPasswordSchema, signInSchema, signUpSchema } from "@/lib/validators/auth";
 
@@ -104,15 +104,9 @@ export function SignUpForm() {
 
 export function SignInForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string>("");
   const [errors, setErrors] = useState<FieldErrors>({});
-
-  const registrationNotice = useMemo(
-    () => (searchParams.get("registered") === "1" ? "Account created. Please sign in." : ""),
-    [searchParams]
-  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -151,7 +145,7 @@ export function SignInForm() {
 
   return (
     <form className="grid gap-4" onSubmit={handleSubmit} noValidate>
-      {registrationNotice ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{registrationNotice}</p> : null}
+      <SignInRegistrationNotice />
       <InputField name="email" label="Email" type="email" autoComplete="email" error={errors.email} />
       <InputField name="password" label="Password" type="password" autoComplete="current-password" error={errors.password} />
       <div className="flex justify-end">
@@ -166,6 +160,15 @@ export function SignInForm() {
       </p>
     </form>
   );
+}
+
+function SignInRegistrationNotice() {
+  const searchParams = useSearchParams();
+  const registrationNotice = searchParams.get("registered") === "1" ? "Account created. Please sign in." : "";
+
+  if (!registrationNotice) return null;
+
+  return <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{registrationNotice}</p>;
 }
 
 export function ForgotPasswordForm() {
