@@ -2,7 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Bot, FolderKanban, UserCircle2, Settings, X } from "lucide-react";
+import {
+  Home,
+  Bot,
+  FolderKanban,
+  UserCircle2,
+  Settings,
+  Bell,
+  Shield,
+  LifeBuoy,
+  Activity,
+  PlusSquare,
+  X
+} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 type DashboardSidebarProps = {
@@ -27,10 +39,15 @@ const labels = {
     subtitle: "Diamond Legal Consulting",
     nav: [
       { href: "/client/dashboard", label: "Dashboard", icon: Home },
+      { href: "/client/dashboard/requests", label: "My Requests", icon: FolderKanban },
+      { href: "/client/dashboard/new-request", label: "New Request", icon: PlusSquare },
       { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
-      { href: "/client/requests", label: "My Requests", icon: FolderKanban },
-      { href: "/client/settings#profile", label: "Profile", icon: UserCircle2 },
-      { href: "/client/settings", label: "Settings", icon: Settings }
+      { href: "/client/dashboard/notifications", label: "Notifications", icon: Bell },
+      { href: "/client/dashboard/activity", label: "Activity", icon: Activity },
+      { href: "/client/dashboard/profile", label: "Profile", icon: UserCircle2 },
+      { href: "/client/dashboard/settings", label: "Settings", icon: Settings },
+      { href: "/client/dashboard/security", label: "Security", icon: Shield },
+      { href: "/client/dashboard/support", label: "Support", icon: LifeBuoy }
     ],
     summary: "Request Snapshot",
     total: "Total",
@@ -42,10 +59,15 @@ const labels = {
     subtitle: "دايموند للاستشارات القانونية",
     nav: [
       { href: "/client/dashboard", label: "لوحة التحكم", icon: Home },
+      { href: "/client/dashboard/requests", label: "طلباتي", icon: FolderKanban },
+      { href: "/client/dashboard/new-request", label: "طلب جديد", icon: PlusSquare },
       { href: "/ai-assistant", label: "المساعد الذكي", icon: Bot },
-      { href: "/client/requests", label: "طلباتي", icon: FolderKanban },
-      { href: "/client/settings#profile", label: "الملف الشخصي", icon: UserCircle2 },
-      { href: "/client/settings", label: "الإعدادات", icon: Settings }
+      { href: "/client/dashboard/notifications", label: "الإشعارات", icon: Bell },
+      { href: "/client/dashboard/activity", label: "النشاط", icon: Activity },
+      { href: "/client/dashboard/profile", label: "الملف الشخصي", icon: UserCircle2 },
+      { href: "/client/dashboard/settings", label: "الإعدادات", icon: Settings },
+      { href: "/client/dashboard/security", label: "الأمان", icon: Shield },
+      { href: "/client/dashboard/support", label: "الدعم", icon: LifeBuoy }
     ],
     summary: "ملخص الطلبات",
     total: "الإجمالي",
