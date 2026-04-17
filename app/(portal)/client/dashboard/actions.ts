@@ -21,15 +21,25 @@ export type DashboardActionState = {
 
 async function requireUser() {
   const session = await auth();
+  const id = session?.user?.id;
 
-  if (!session?.user?.id) {
+  if (typeof id !== "string" || id.trim().length === 0) {
+    redirect("/auth/sign-in");
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, email: true, name: true }
+  });
+
+  if (!dbUser) {
     redirect("/auth/sign-in");
   }
 
   return {
-    id: session.user.id,
-    email: session.user.email ?? "",
-    name: session.user.name ?? "Client"
+    id: dbUser.id,
+    email: dbUser.email ?? "",
+    name: dbUser.name ?? "Client"
   };
 }
 
@@ -290,6 +300,9 @@ export async function createSupportRequestAction(_: DashboardActionState, formDa
 
 export async function markNotificationAsReadAction(notificationId: string) {
   const user = await requireUser();
+  if (typeof notificationId !== "string" || notificationId.trim().length === 0) {
+    return;
+  }
 
   await prisma.notification.updateMany({
     where: {

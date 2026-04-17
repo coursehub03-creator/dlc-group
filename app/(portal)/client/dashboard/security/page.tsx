@@ -1,13 +1,8 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { SecurityForm } from "../components/security-form";
+import { requireDashboardUser } from "../lib/server-utils";
 
 export default async function SecurityPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  await requireDashboardUser();
 
   return (
     <section className="space-y-6">

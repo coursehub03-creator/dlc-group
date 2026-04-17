@@ -1,38 +1,42 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { RequestStatusBadge } from "../../components/request-status-badge";
+import { requireDashboardUser, withSafeDashboardQuery } from "../../lib/server-utils";
 
 export default async function RequestDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  const user = await requireDashboardUser();
 
   const { id } = await params;
+  if (typeof id !== "string" || id.trim().length === 0) {
+    notFound();
+  }
 
-  const request = await prisma.serviceRequest.findFirst({
-    where: {
-      id,
-      userId: session.user.id
-    },
-    include: {
-      category: {
-        select: {
-          nameEn: true,
-          nameAr: true
-        }
-      },
-      case: {
+  const request = await withSafeDashboardQuery(
+    () =>
+      prisma.serviceRequest.findFirst({
+        where: {
+          id,
+          userId: user.id
+        },
         include: {
-          history: {
-            orderBy: { createdAt: "asc" }
+          category: {
+            select: {
+              nameEn: true,
+              nameAr: true
+            }
+          },
+          case: {
+            include: {
+              history: {
+                orderBy: { createdAt: "asc" }
+              }
+            }
           }
         }
-      }
-    }
-  });
+      }),
+    null
+  );
 
   if (!request) {
     notFound();
@@ -62,8 +66,8 @@ export default async function RequestDetailsPage({ params }: { params: Promise<{
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-navy">{request.title ?? request.category.nameEn}</h1>
-            <p className="mt-1 text-sm text-slate-600">{request.category.nameEn} / {request.category.nameAr}</p>
+            <h1 className="text-2xl font-semibold text-navy">{request.title ?? request.category?.nameEn ?? "General request"}</h1>
+            <p className="mt-1 text-sm text-slate-600">{request.category?.nameEn ?? "General"} / {request.category?.nameAr ?? "عام"}</p>
           </div>
           <RequestStatusBadge status={request.status} />
         </div>

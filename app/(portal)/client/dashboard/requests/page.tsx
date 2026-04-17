@@ -1,34 +1,33 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { RequestStatusBadge } from "../components/request-status-badge";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 export default async function RequestsPage({
   searchParams
 }: {
   searchParams?: Promise<{ created?: string }>;
 }) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  const user = await requireDashboardUser();
 
   const params = (await searchParams) ?? {};
 
-  const requests = await prisma.serviceRequest.findMany({
-    where: { userId: session.user.id },
-    include: {
-      category: {
-        select: {
-          nameEn: true,
-          nameAr: true
-        }
-      }
-    },
-    orderBy: { createdAt: "desc" }
-  });
+  const requests = await withSafeDashboardQuery(
+    () =>
+      prisma.serviceRequest.findMany({
+        where: { userId: user.id },
+        include: {
+          category: {
+            select: {
+              nameEn: true,
+              nameAr: true
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      }),
+    []
+  );
 
   return (
     <section className="space-y-6">
@@ -68,8 +67,8 @@ export default async function RequestsPage({
               {requests.map((request) => (
                 <tr key={request.id}>
                   <td className="px-4 py-4">
-                    <p className="font-semibold text-slate-800">{request.title ?? request.category.nameEn}</p>
-                    <p className="text-xs text-slate-500">{request.category.nameEn} / {request.category.nameAr}</p>
+                    <p className="font-semibold text-slate-800">{request.title ?? request.category?.nameEn ?? "General request"}</p>
+                    <p className="text-xs text-slate-500">{request.category?.nameEn ?? "General"} / {request.category?.nameAr ?? "عام"}</p>
                   </td>
                   <td className="px-4 py-4">
                     <RequestStatusBadge status={request.status} />

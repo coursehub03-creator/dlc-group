@@ -1,19 +1,18 @@
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { redirect } from "next/navigation";
 import { NewRequestForm } from "../components/new-request-form";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 export default async function NewRequestPage() {
-  const session = await auth();
+  await requireDashboardUser();
 
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
-
-  const categories = await prisma.serviceCategory.findMany({
-    orderBy: { nameEn: "asc" },
-    select: { id: true, nameEn: true, nameAr: true }
-  });
+  const categories = await withSafeDashboardQuery(
+    () =>
+      prisma.serviceCategory.findMany({
+        orderBy: { nameEn: "asc" },
+        select: { id: true, nameEn: true, nameAr: true }
+      }),
+    []
+  );
 
   return (
     <section className="space-y-6">

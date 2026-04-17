@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { StatsCard } from "./components/stats-card";
+import { parseDashboardLocale, requireDashboardUser, withSafeDashboardQuery } from "./lib/server-utils";
 
 const copy = {
   en: {
@@ -61,35 +60,39 @@ export default async function ClientDashboardPage({
 }: {
   searchParams?: Promise<{ lang?: string }>;
 }) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  const user = await requireDashboardUser();
 
   const params = (await searchParams) ?? {};
-  const locale = params.lang === "ar" ? "ar" : "en";
+  const locale = parseDashboardLocale(params);
   const t = copy[locale];
 
   const [stats, recentRequests] = await Promise.all([
-    prisma.serviceRequest.groupBy({
-      by: ["status"],
-      where: { userId: session.user.id },
-      _count: { _all: true }
-    }),
-    prisma.serviceRequest.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: {
-        category: {
-          select: {
-            nameEn: true,
-            nameAr: true
+    withSafeDashboardQuery(
+      () =>
+        prisma.serviceRequest.groupBy({
+          by: ["status"],
+          where: { userId: user.id },
+          _count: { _all: true }
+        }),
+      []
+    ),
+    withSafeDashboardQuery(
+      () =>
+        prisma.serviceRequest.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          include: {
+            category: {
+              select: {
+                nameEn: true,
+                nameAr: true
+              }
+            }
           }
-        }
-      }
-    })
+        }),
+      []
+    )
   ]);
 
   const totals = stats.reduce(
@@ -117,7 +120,7 @@ export default async function ClientDashboardPage({
     <section className="space-y-8">
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
         <h1 className="text-3xl font-semibold text-navy">
-          {t.welcome}, {session.user.name ?? "Client"}
+          {t.welcome}, {user.name}
         </h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">{t.subtitle}</p>
       </div>
@@ -169,7 +172,7 @@ export default async function ClientDashboardPage({
               <li key={request.id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-medium text-slate-800">
-                    {locale === "ar" ? request.category.nameAr : request.category.nameEn}
+                    {locale === "ar" ? request.category?.nameAr ?? request.category?.nameEn ?? "General request" : request.category?.nameEn ?? request.category?.nameAr ?? "General request"}
                   </p>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass[request.status] ?? "bg-slate-100 text-slate-700"}`}>
                     {t.status}: {request.status.replaceAll("_", " ")}
