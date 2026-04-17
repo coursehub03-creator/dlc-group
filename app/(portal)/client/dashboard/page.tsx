@@ -137,13 +137,13 @@ export default async function ClientDashboardPage({
           {t.actions.assistant}
         </Link>
         <Link
-          href={`/contact?lang=${locale}`}
+          href={`/client/dashboard/new-request?lang=${locale}`}
           className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-700 transition hover:border-navy hover:text-navy"
         >
           {t.actions.request}
         </Link>
         <Link
-          href={`/contact?lang=${locale}`}
+          href={`/client/dashboard/support?lang=${locale}`}
           className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-700 transition hover:border-navy hover:text-navy"
         >
           {t.actions.support}
@@ -153,7 +153,7 @@ export default async function ClientDashboardPage({
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-navy">{t.recentActivity}</h2>
-          <Link href={`/client/requests?lang=${locale}`} className="text-sm font-semibold text-navy hover:text-gold">
+          <Link href={`/client/dashboard/requests?lang=${locale}`} className="text-sm font-semibold text-navy hover:text-gold">
             {t.viewRequests}
           </Link>
         </div>
