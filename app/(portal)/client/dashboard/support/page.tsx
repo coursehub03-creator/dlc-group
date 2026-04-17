@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { SupportForm } from "../components/support-form";
+import { requireDashboardUser } from "../lib/server-utils";
 
 const faqs = [
   {
@@ -18,11 +17,7 @@ const faqs = [
 ];
 
 export default async function SupportPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  await requireDashboardUser();
 
   return (
     <section className="space-y-6">

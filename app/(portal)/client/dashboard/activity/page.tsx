@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 const actionLabels: Record<string, string> = {
   REQUEST_CREATED: "Created a new legal request",
@@ -11,24 +10,28 @@ const actionLabels: Record<string, string> = {
 };
 
 export default async function ActivityPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  const user = await requireDashboardUser();
 
   const [logs, recentRequests] = await Promise.all([
-    prisma.activityLog.findMany({
-      where: { actorId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 30
-    }),
-    prisma.serviceRequest.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: { id: true, title: true, createdAt: true }
-    })
+    withSafeDashboardQuery(
+      () =>
+        prisma.activityLog.findMany({
+          where: { actorId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 30
+        }),
+      []
+    ),
+    withSafeDashboardQuery(
+      () =>
+        prisma.serviceRequest.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { id: true, title: true, createdAt: true }
+        }),
+      []
+    )
   ]);
 
   const fallbackRequestEvents = recentRequests.map((request) => ({

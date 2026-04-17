@@ -1,22 +1,18 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { ProfileForm } from "../components/profile-form";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 export default async function ProfilePage() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
+  const authUser = await requireDashboardUser();
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { profile: true }
-  });
-
-  if (!user) {
-    redirect("/auth/sign-in");
-  }
+  const user = await withSafeDashboardQuery(
+    () =>
+      prisma.user.findUnique({
+        where: { id: authUser.id },
+        include: { profile: true }
+      }),
+    null
+  );
 
   return (
     <section className="space-y-6">
@@ -28,11 +24,11 @@ export default async function ProfilePage() {
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <ProfileForm
           defaultValues={{
-            name: user.name,
-            email: user.email,
-            phone: user.profile?.phone,
-            country: user.profile?.country,
-            language: user.profile?.language === "en" ? "en" : "ar"
+            name: user?.name ?? authUser.name,
+            email: user?.email ?? authUser.email,
+            phone: user?.profile?.phone,
+            country: user?.profile?.country,
+            language: user?.profile?.language === "en" ? "en" : "ar"
           }}
         />
       </div>

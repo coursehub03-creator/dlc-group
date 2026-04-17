@@ -1,16 +1,11 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { SettingsForm } from "../components/settings-form";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 export default async function SettingsPage() {
-  const session = await auth();
+  const user = await requireDashboardUser();
 
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
-
-  const profile = await prisma.profile.findUnique({ where: { userId: session.user.id } });
+  const profile = await withSafeDashboardQuery(() => prisma.profile.findUnique({ where: { userId: user.id } }), null);
 
   return (
     <section className="space-y-6">

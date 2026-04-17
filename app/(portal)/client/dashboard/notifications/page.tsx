@@ -1,20 +1,19 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { MarkNotificationReadButton } from "../components/mark-notification-read-button";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 export default async function NotificationsPage() {
-  const session = await auth();
+  const user = await requireDashboardUser();
 
-  if (!session?.user?.id) {
-    redirect("/auth/sign-in");
-  }
-
-  const notifications = await prisma.notification.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 20
-  });
+  const notifications = await withSafeDashboardQuery(
+    () =>
+      prisma.notification.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      }),
+    []
+  );
 
   return (
     <section className="space-y-6">
