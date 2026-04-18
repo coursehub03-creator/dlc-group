@@ -22,7 +22,13 @@ export default async function NewRequestPage() {
       </div>
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <NewRequestForm categories={categories} />
+        {categories.length === 0 ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Service categories are temporarily unavailable. Please try again shortly or contact support.
+          </div>
+        ) : (
+          <NewRequestForm categories={categories} />
+        )}
       </div>
     </section>
   );

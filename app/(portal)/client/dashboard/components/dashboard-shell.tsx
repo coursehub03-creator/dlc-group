@@ -17,9 +17,10 @@ type DashboardShellProps = {
     activeRequests: number;
     completedRequests: number;
   };
+  unreadNotifications: number;
 };
 
-export function DashboardShell({ children, user, stats }: DashboardShellProps) {
+export function DashboardShell({ children, user, stats, unreadNotifications }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const params = useSearchParams();
   const locale = params.get("lang") === "ar" ? "ar" : "en";
@@ -33,6 +34,7 @@ export function DashboardShell({ children, user, stats }: DashboardShellProps) {
           onClose={() => setSidebarOpen(false)}
           user={user}
           stats={stats}
+          unreadNotifications={unreadNotifications}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <DashboardHeader
