@@ -134,36 +134,48 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
     return { error: "Please fix the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const dbUser = await getUserWithOptionalProfile(user.id);
+  let dbUser: Awaited<ReturnType<typeof getUserWithOptionalProfile>>;
+  try {
+    dbUser = await getUserWithOptionalProfile(user.id);
+  } catch (error) {
+    console.error("[dashboard] createClientRequestAction user lookup failed", error);
+    return { error: "Unable to find your account." };
+  }
 
   if (!dbUser) {
     return { error: "Unable to find your account." };
   }
 
-  const category = await prisma.serviceCategory.findUnique({
-    where: { id: parsed.data.categoryId },
-    select: { id: true }
-  });
-
-  let resolvedCategoryId = category?.id ?? null;
-
-  if (!category) {
-    const defaultCategory = await prisma.serviceCategory.upsert({
-      where: { slug: "general-legal-consultation" },
-      create: {
-        slug: "general-legal-consultation",
-        nameEn: "General legal consultation",
-        nameAr: "استشارة قانونية عامة"
-      },
-      update: {},
+  let resolvedCategoryId: string | null = null;
+  try {
+    const category = await prisma.serviceCategory.findUnique({
+      where: { id: parsed.data.categoryId },
       select: { id: true }
     });
 
-    if (!defaultCategory?.id) {
-      return { error: "Selected category is unavailable. Please refresh and try again." };
-    }
+    resolvedCategoryId = category?.id ?? null;
 
-    resolvedCategoryId = defaultCategory.id;
+    if (!category) {
+      const defaultCategory = await prisma.serviceCategory.upsert({
+        where: { slug: "general-legal-consultation" },
+        create: {
+          slug: "general-legal-consultation",
+          nameEn: "General legal consultation",
+          nameAr: "استشارة قانونية عامة"
+        },
+        update: {},
+        select: { id: true }
+      });
+
+      if (!defaultCategory?.id) {
+        return { error: "Selected category is unavailable. Please refresh and try again." };
+      }
+
+      resolvedCategoryId = defaultCategory.id;
+    }
+  } catch (error) {
+    console.error("[dashboard] createClientRequestAction category lookup failed", error);
+    return { error: "Selected category is unavailable. Please refresh and try again." };
   }
 
   if (!resolvedCategoryId) {
@@ -171,17 +183,13 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
   }
 
   try {
-    const created = await prisma.serviceRequest.create({
+    const created = await prisma.legalRequest.create({
       data: {
         userId: user.id,
         categoryId: resolvedCategoryId,
-        title: parsed.data.title,
-        name: dbUser.name,
-        email: dbUser.email,
-        phone: dbUser.profile?.phone || null,
+        subject: parsed.data.title,
+        details: parsed.data.message,
         country: parsed.data.country || dbUser.profile?.country || null,
-        message: parsed.data.message,
-        status: "NEW"
       }
     });
 
@@ -189,17 +197,16 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
       safeCreateActivityLog({
         actorId: user.id,
         action: "REQUEST_CREATED",
-        entityType: "ServiceRequest",
+        entityType: "LegalRequest",
         entityId: created.id,
         meta: {
-          title: created.title,
-          status: created.status
+          subject: created.subject
         }
       }),
       safeCreateNotification({
         userId: user.id,
         title: "Request submitted",
-        message: `Your legal request \"${created.title ?? "Untitled"}\" has been received.`
+        message: `Your legal request \"${created.subject}\" has been received.`
       })
     ]);
 
@@ -296,27 +303,32 @@ export async function updateSettingsAction(_: DashboardActionState, formData: Fo
     return { error: "Please fix your settings.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  await prisma.profile.upsert({
-    where: { userId: user.id },
-    create: {
-      userId: user.id,
-      language: parsed.data.language,
-      timezone: parsed.data.timezone,
-      notificationsEnabled: parsed.data.notificationsEnabled
-    },
-    update: {
-      language: parsed.data.language,
-      timezone: parsed.data.timezone,
-      notificationsEnabled: parsed.data.notificationsEnabled
-    }
-  });
+  try {
+    await prisma.profile.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        language: parsed.data.language,
+        timezone: parsed.data.timezone,
+        notificationsEnabled: parsed.data.notificationsEnabled
+      },
+      update: {
+        language: parsed.data.language,
+        timezone: parsed.data.timezone,
+        notificationsEnabled: parsed.data.notificationsEnabled
+      }
+    });
 
-  await safeCreateActivityLog({
-    actorId: user.id,
-    action: "SETTINGS_UPDATED",
-    entityType: "Profile",
-    entityId: user.id
-  });
+    await safeCreateActivityLog({
+      actorId: user.id,
+      action: "SETTINGS_UPDATED",
+      entityType: "Profile",
+      entityId: user.id
+    });
+  } catch (error) {
+    console.error("[dashboard] updateSettingsAction failed", error);
+    return { error: "Unable to save settings right now. Please try again." };
+  }
 
   revalidatePath("/client/dashboard/settings");
   return { success: "Settings saved." };
@@ -341,10 +353,16 @@ export async function updateSecurityAction(_: DashboardActionState, formData: Fo
     return { error: "Please review the password form.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { passwordHash: true }
-  });
+  let dbUser: { passwordHash: string | null } | null = null;
+  try {
+    dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true }
+    });
+  } catch (error) {
+    console.error("[dashboard] updateSecurityAction user lookup failed", error);
+    return { error: "Unable to update password right now. Please try again." };
+  }
 
   if (!dbUser?.passwordHash) {
     return { error: "Password change is unavailable for this account." };
@@ -357,17 +375,22 @@ export async function updateSecurityAction(_: DashboardActionState, formData: Fo
 
   const newHash = await hashPassword(parsed.data.newPassword);
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: newHash }
-  });
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: newHash }
+    });
 
-  await safeCreateActivityLog({
-    actorId: user.id,
-    action: "PASSWORD_CHANGED",
-    entityType: "User",
-    entityId: user.id
-  });
+    await safeCreateActivityLog({
+      actorId: user.id,
+      action: "PASSWORD_CHANGED",
+      entityType: "User",
+      entityId: user.id
+    });
+  } catch (error) {
+    console.error("[dashboard] updateSecurityAction failed", error);
+    return { error: "Unable to update password right now. Please try again." };
+  }
 
   return { success: "Password changed successfully." };
 }
@@ -390,57 +413,30 @@ export async function createSupportRequestAction(_: DashboardActionState, formDa
     return { error: "Please complete the support form.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const dbUser = await getUserWithOptionalProfile(user.id);
+  let dbUser: Awaited<ReturnType<typeof getUserWithOptionalProfile>>;
+  try {
+    dbUser = await getUserWithOptionalProfile(user.id);
+  } catch (error) {
+    console.error("[dashboard] createSupportRequestAction user lookup failed", error);
+    return { error: "Unable to find your account." };
+  }
 
   if (!dbUser) {
     return { error: "Unable to find your account." };
   }
 
   try {
-    try {
-      await prisma.contactInquiry.create({
-        data: {
-          name: dbUser.name,
-          email: dbUser.email,
-          phone: dbUser.profile?.phone || null,
-          country: dbUser.profile?.country || null,
-          serviceType: `Support: ${parsed.data.subject}`,
-          message: parsed.data.message,
-          consent: true
-        }
-      });
-    } catch (error) {
-      if (!isMissingTableOrColumnError(error)) {
-        throw error;
+    await prisma.contactInquiry.create({
+      data: {
+        name: dbUser.name ?? "Client",
+        email: dbUser.email,
+        phone: dbUser.profile?.phone || null,
+        country: dbUser.profile?.country || null,
+        serviceType: `Support: ${parsed.data.subject}`,
+        message: parsed.data.message,
+        consent: true
       }
-
-      console.error("[dashboard] contact inquiry unavailable, using service requests", error);
-
-      const supportCategory = await prisma.serviceCategory.upsert({
-        where: { slug: "support" },
-        create: {
-          slug: "support",
-          nameEn: "Support",
-          nameAr: "الدعم"
-        },
-        update: {},
-        select: { id: true }
-      });
-
-      await prisma.serviceRequest.create({
-        data: {
-          userId: user.id,
-          categoryId: supportCategory.id,
-          title: `Support: ${parsed.data.subject}`,
-          name: dbUser.name,
-          email: dbUser.email,
-          phone: dbUser.profile?.phone || null,
-          country: dbUser.profile?.country || null,
-          message: parsed.data.message,
-          status: "NEW"
-        }
-      });
-    }
+    });
 
     await Promise.all([
       safeCreateActivityLog({

@@ -71,13 +71,14 @@ enum TrademarkStatus {
 model User {
   id              String           @id @default(cuid())
   email           String           @unique
-  passwordHash    String?
-  name            String
+  passwordHash    String
+  name            String?
   role            RoleType         @default(CLIENT)
   profile         Profile?
   accounts        Account[]
   sessions        Session[]
   serviceRequests ServiceRequest[]
+  legalRequests   LegalRequest[]
   aiConversations AIConversation[]
   notifications   Notification[]
   createdAt       DateTime         @default(now())
@@ -85,14 +86,14 @@ model User {
 }
 
 model Profile {
-  id                   String @id @default(cuid())
-  userId               String @unique
+  id                   String  @id @default(cuid())
+  userId               String  @unique
   phone                String?
   country              String?
-  language             String @default("ar")
+  language             String  @default("ar")
   timezone             String?
   notificationsEnabled Boolean @default(true)
-  user                 User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -114,17 +115,30 @@ model Session {
 }
 
 model ServiceCategory {
-  id        String           @id @default(cuid())
-  slug      String           @unique
-  nameEn    String
-  nameAr    String
-  requests  ServiceRequest[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id            String           @id @default(cuid())
+  slug          String           @unique
+  nameEn        String
+  nameAr        String
+  requests      ServiceRequest[]
+  legalRequests LegalRequest[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model LegalRequest {
+  id         String          @id @default(cuid())
+  userId     String
+  categoryId String
+  subject    String
+  details    String
+  country    String?
+  createdAt  DateTime        @default(now())
+  user       User            @relation(fields: [userId], references: [id])
+  category   ServiceCategory @relation(fields: [categoryId], references: [id])
 }
 
 model ServiceRequest {
-  id         String         @id @default(cuid())
+  id         String          @id @default(cuid())
   userId     String?
   categoryId String
   title      String?
@@ -133,24 +147,24 @@ model ServiceRequest {
   phone      String?
   country    String?
   message    String
-  status     RequestStatus  @default(NEW)
-  user       User?          @relation(fields: [userId], references: [id])
+  status     RequestStatus   @default(NEW)
+  user       User?           @relation(fields: [userId], references: [id])
   category   ServiceCategory @relation(fields: [categoryId], references: [id])
   case       Case?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
   @@index([status, createdAt])
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   title     String
   message   String
   readAt    DateTime?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
 }
@@ -230,16 +244,16 @@ model LandDisputeRequest {
 }
 
 model MonitoringRequest {
-  id        String           @id @default(cuid())
+  id          String           @id @default(cuid())
   companyName String
-  country   String
-  industry  String
-  purpose   String
-  notes     String?
-  status    MonitoringStatus @default(NEW)
-  ownerId   String?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  country     String
+  industry    String
+  purpose     String
+  notes       String?
+  status      MonitoringStatus @default(NEW)
+  ownerId     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model BlogPost {
