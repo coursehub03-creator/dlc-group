@@ -9,7 +9,7 @@ export default async function ClientDashboardLayout({
 }) {
   const user = await requireDashboardUser();
 
-  const [totalConsultations, activeRequests, completedRequests] = await Promise.all([
+  const [totalConsultations, activeRequests, completedRequests, unreadNotifications] = await Promise.all([
     withSafeDashboardQuery(() => prisma.serviceRequest.count({ where: { userId: user.id } }), 0),
     withSafeDashboardQuery(
       () =>
@@ -34,6 +34,16 @@ export default async function ClientDashboardLayout({
           }
         }),
       0
+    ),
+    withSafeDashboardQuery(
+      () =>
+        prisma.notification.count({
+          where: {
+            userId: user.id,
+            readAt: null
+          }
+        }),
+      0
     )
   ]);
 
@@ -49,6 +59,7 @@ export default async function ClientDashboardLayout({
         activeRequests,
         completedRequests
       }}
+      unreadNotifications={unreadNotifications}
     >
       {children}
     </DashboardShell>

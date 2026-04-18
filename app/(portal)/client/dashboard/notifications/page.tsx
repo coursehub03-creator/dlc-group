@@ -14,6 +14,15 @@ export default async function NotificationsPage() {
       }),
     []
   );
+  const fallbackActivity = await withSafeDashboardQuery(
+    () =>
+      prisma.activityLog.findMany({
+        where: { actorId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 10
+      }),
+    []
+  );
 
   return (
     <section className="space-y-6">
@@ -23,9 +32,24 @@ export default async function NotificationsPage() {
       </div>
 
       {notifications.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <p className="text-lg font-semibold text-slate-700">No notifications yet</p>
-          <p className="mt-2 text-sm text-slate-500">You will see updates here when your requests change status.</p>
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
+            <p className="text-lg font-semibold text-slate-700">No notifications yet</p>
+            <p className="mt-2 text-sm text-slate-500">You will see updates here when your requests change status.</p>
+          </div>
+          {fallbackActivity.length > 0 ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-base font-semibold text-navy">Recent activity</h2>
+              <ul className="mt-3 space-y-3">
+                {fallbackActivity.map((item) => (
+                  <li key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                    <p className="font-medium text-slate-700">{item.action.replaceAll("_", " ")}</p>
+                    <p className="mt-1 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("en-US")}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : (
         <ul className="space-y-3">

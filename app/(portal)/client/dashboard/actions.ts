@@ -44,7 +44,13 @@ async function requireUser() {
 }
 
 export async function createClientRequestAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
-  const user = await requireUser();
+  let user: Awaited<ReturnType<typeof requireUser>>;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    console.error("[dashboard] createClientRequestAction auth error", error);
+    return { error: "Please sign in again to submit your request." };
+  }
 
   const parsed = newRequestSchema.safeParse({
     categoryId: formData.get("categoryId"),
@@ -66,49 +72,69 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
     return { error: "Unable to find your account." };
   }
 
-  const created = await prisma.serviceRequest.create({
-    data: {
-      userId: user.id,
-      categoryId: parsed.data.categoryId,
-      title: parsed.data.title,
-      name: dbUser.name,
-      email: dbUser.email,
-      phone: dbUser.profile?.phone,
-      country: parsed.data.country || dbUser.profile?.country,
-      message: parsed.data.message,
-      status: "NEW"
-    }
+  const category = await prisma.serviceCategory.findUnique({
+    where: { id: parsed.data.categoryId },
+    select: { id: true }
   });
 
-  await prisma.$transaction([
-    prisma.activityLog.create({
-      data: {
-        actorId: user.id,
-        action: "REQUEST_CREATED",
-        entityType: "ServiceRequest",
-        entityId: created.id,
-        meta: {
-          title: created.title,
-          status: created.status
-        }
-      }
-    }),
-    prisma.notification.create({
+  if (!category) {
+    return { error: "Selected category is unavailable. Please refresh and try again." };
+  }
+
+  try {
+    const created = await prisma.serviceRequest.create({
       data: {
         userId: user.id,
-        title: "Request submitted",
-        message: `Your legal request \"${created.title ?? "Untitled"}\" has been received.`
+        categoryId: category.id,
+        title: parsed.data.title,
+        name: dbUser.name,
+        email: dbUser.email,
+        phone: dbUser.profile?.phone || null,
+        country: parsed.data.country || dbUser.profile?.country || null,
+        message: parsed.data.message,
+        status: "NEW"
       }
-    })
-  ]);
+    });
 
-  revalidatePath("/client/dashboard");
-  revalidatePath("/client/dashboard/requests");
-  redirect("/client/dashboard/requests?created=1");
+    await prisma.$transaction([
+      prisma.activityLog.create({
+        data: {
+          actorId: user.id,
+          action: "REQUEST_CREATED",
+          entityType: "ServiceRequest",
+          entityId: created.id,
+          meta: {
+            title: created.title,
+            status: created.status
+          }
+        }
+      }),
+      prisma.notification.create({
+        data: {
+          userId: user.id,
+          title: "Request submitted",
+          message: `Your legal request \"${created.title ?? "Untitled"}\" has been received.`
+        }
+      })
+    ]);
+
+    revalidatePath("/client/dashboard");
+    revalidatePath("/client/dashboard/requests");
+    redirect("/client/dashboard/requests?created=1");
+  } catch (error) {
+    console.error("[dashboard] createClientRequestAction failed", error);
+    return { error: "We could not submit your request right now. Please try again." };
+  }
 }
 
 export async function updateProfileAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
-  const user = await requireUser();
+  let user: Awaited<ReturnType<typeof requireUser>>;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    console.error("[dashboard] updateProfileAction auth error", error);
+    return { error: "Please sign in again to update your profile." };
+  }
 
   const parsed = profileUpdateSchema.safeParse({
     name: formData.get("name"),
@@ -121,35 +147,40 @@ export async function updateProfileAction(_: DashboardActionState, formData: For
     return { error: "Please review your profile details.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      name: parsed.data.name,
-      profile: {
-        upsert: {
-          create: {
-            phone: parsed.data.phone,
-            country: parsed.data.country,
-            language: parsed.data.language
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        name: parsed.data.name,
+        profile: {
+          upsert: {
+            create: {
+              phone: parsed.data.phone?.trim() ? parsed.data.phone : null,
+              country: parsed.data.country?.trim() ? parsed.data.country : null,
+              language: parsed.data.language
+            },
+            update: {
+              phone: parsed.data.phone?.trim() ? parsed.data.phone : null,
+              country: parsed.data.country?.trim() ? parsed.data.country : null,
+              language: parsed.data.language
+            }
           },
-          update: {
-            phone: parsed.data.phone,
-            country: parsed.data.country,
-            language: parsed.data.language
-          }
         }
       }
-    }
-  });
+    });
 
-  await prisma.activityLog.create({
-    data: {
-      actorId: user.id,
-      action: "PROFILE_UPDATED",
-      entityType: "User",
-      entityId: user.id
-    }
-  });
+    await prisma.activityLog.create({
+      data: {
+        actorId: user.id,
+        action: "PROFILE_UPDATED",
+        entityType: "User",
+        entityId: user.id
+      }
+    });
+  } catch (error) {
+    console.error("[dashboard] updateProfileAction failed", error);
+    return { error: "Unable to save profile changes right now. Please try again." };
+  }
 
   revalidatePath("/client/dashboard/profile");
   return { success: "Profile updated successfully." };
@@ -243,7 +274,13 @@ export async function updateSecurityAction(_: DashboardActionState, formData: Fo
 }
 
 export async function createSupportRequestAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
-  const user = await requireUser();
+  let user: Awaited<ReturnType<typeof requireUser>>;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    console.error("[dashboard] createSupportRequestAction auth error", error);
+    return { error: "Please sign in again to send a support request." };
+  }
 
   const parsed = supportRequestSchema.safeParse({
     subject: formData.get("subject"),
@@ -263,34 +300,39 @@ export async function createSupportRequestAction(_: DashboardActionState, formDa
     return { error: "Unable to find your account." };
   }
 
-  await prisma.contactInquiry.create({
-    data: {
-      name: dbUser.name,
-      email: dbUser.email,
-      phone: dbUser.profile?.phone,
-      country: dbUser.profile?.country,
-      serviceType: `Support: ${parsed.data.subject}`,
-      message: parsed.data.message,
-      consent: true
-    }
-  });
+  try {
+    await prisma.contactInquiry.create({
+      data: {
+        name: dbUser.name,
+        email: dbUser.email,
+        phone: dbUser.profile?.phone || null,
+        country: dbUser.profile?.country || null,
+        serviceType: `Support: ${parsed.data.subject}`,
+        message: parsed.data.message,
+        consent: true
+      }
+    });
 
-  await prisma.$transaction([
-    prisma.activityLog.create({
-      data: {
-        actorId: user.id,
-        action: "SUPPORT_REQUEST_CREATED",
-        entityType: "ContactInquiry"
-      }
-    }),
-    prisma.notification.create({
-      data: {
-        userId: user.id,
-        title: "Support request sent",
-        message: "Our legal support desk received your message and will reply soon."
-      }
-    })
-  ]);
+    await prisma.$transaction([
+      prisma.activityLog.create({
+        data: {
+          actorId: user.id,
+          action: "SUPPORT_REQUEST_CREATED",
+          entityType: "ContactInquiry"
+        }
+      }),
+      prisma.notification.create({
+        data: {
+          userId: user.id,
+          title: "Support request sent",
+          message: "Our legal support desk received your message and will reply soon."
+        }
+      })
+    ]);
+  } catch (error) {
+    console.error("[dashboard] createSupportRequestAction failed", error);
+    return { error: "Unable to submit your support request right now. Please try again." };
+  }
 
   revalidatePath("/client/dashboard/support");
   revalidatePath("/client/dashboard/notifications");

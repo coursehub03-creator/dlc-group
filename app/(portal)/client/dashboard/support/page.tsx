@@ -1,5 +1,6 @@
+import { prisma } from "@/lib/db/prisma";
 import { SupportForm } from "../components/support-form";
-import { requireDashboardUser } from "../lib/server-utils";
+import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 const faqs = [
   {
@@ -17,7 +18,28 @@ const faqs = [
 ];
 
 export default async function SupportPage() {
-  await requireDashboardUser();
+  const user = await requireDashboardUser();
+
+  const supportMessages = await withSafeDashboardQuery(
+    () =>
+      prisma.contactInquiry.findMany({
+        where: {
+          email: user.email,
+          serviceType: {
+            startsWith: "Support:"
+          }
+        },
+        select: {
+          id: true,
+          serviceType: true,
+          message: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5
+      }),
+    []
+  );
 
   return (
     <section className="space-y-6">
@@ -46,6 +68,26 @@ export default async function SupportPage() {
             <SupportForm />
           </div>
         </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-navy">Recent support requests</h2>
+        {supportMessages.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-6 text-center">
+            <p className="text-sm font-semibold text-slate-700">No support requests yet</p>
+            <p className="mt-1 text-sm text-slate-500">When you contact support, your latest messages will appear here.</p>
+          </div>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {supportMessages.map((message) => (
+              <li key={message.id} className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-800">{message.serviceType?.replace("Support:", "").trim() || "Support request"}</p>
+                <p className="mt-2 text-sm text-slate-600">{message.message}</p>
+                <p className="mt-2 text-xs text-slate-500">{new Date(message.createdAt).toLocaleString("en-US")}</p>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
