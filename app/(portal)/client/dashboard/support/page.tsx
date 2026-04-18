@@ -26,22 +26,48 @@ export default async function SupportPage() {
         return Promise.resolve([]);
       }
 
-      return prisma.contactInquiry.findMany({
-        where: {
-          email: user.email,
-          serviceType: {
-            startsWith: "Support:"
-          }
-        },
-        select: {
-          id: true,
-          serviceType: true,
-          message: true,
-          createdAt: true
-        },
-        orderBy: { createdAt: "desc" },
-        take: 5
-      });
+      return prisma.contactInquiry
+        .findMany({
+          where: {
+            email: user.email,
+            serviceType: {
+              startsWith: "Support:"
+            }
+          },
+          select: {
+            id: true,
+            serviceType: true,
+            message: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5
+        })
+        .catch(async () => {
+          const fallback = await prisma.serviceRequest.findMany({
+            where: {
+              email: user.email,
+              title: {
+                startsWith: "Support:"
+              }
+            },
+            select: {
+              id: true,
+              title: true,
+              message: true,
+              createdAt: true
+            },
+            orderBy: { createdAt: "desc" },
+            take: 5
+          });
+
+          return fallback.map((item) => ({
+            id: item.id,
+            serviceType: item.title ?? "Support request",
+            message: item.message,
+            createdAt: item.createdAt
+          }));
+        });
     },
     []
   );
