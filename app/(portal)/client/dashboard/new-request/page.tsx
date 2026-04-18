@@ -5,14 +5,29 @@ import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-util
 export default async function NewRequestPage() {
   await requireDashboardUser();
 
-  const categories = await withSafeDashboardQuery(
-    () =>
-      prisma.serviceCategory.findMany({
-        orderBy: { nameEn: "asc" },
-        select: { id: true, nameEn: true, nameAr: true }
-      }),
-    []
-  );
+  const categories = await withSafeDashboardQuery(async () => {
+    const existing = await prisma.serviceCategory.findMany({
+      orderBy: { nameEn: "asc" },
+      select: { id: true, nameEn: true, nameAr: true }
+    });
+
+    if (existing.length > 0) {
+      return existing;
+    }
+
+    const fallback = await prisma.serviceCategory.upsert({
+      where: { slug: "general-legal-consultation" },
+      create: {
+        slug: "general-legal-consultation",
+        nameEn: "General legal consultation",
+        nameAr: "استشارة قانونية عامة"
+      },
+      update: {},
+      select: { id: true, nameEn: true, nameAr: true }
+    });
+
+    return [fallback];
+  }, []);
 
   return (
     <section className="space-y-6">
