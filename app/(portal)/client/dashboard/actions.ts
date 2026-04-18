@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth/auth";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db/prisma";
@@ -18,6 +19,42 @@ export type DashboardActionState = {
   error?: string;
   fieldErrors?: Record<string, string[]>;
 };
+
+async function safeCreateActivityLog(input: {
+  actorId?: string | null;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  meta?: Prisma.InputJsonValue | null;
+}) {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        actorId: input.actorId ?? null,
+        action: input.action,
+        entityType: input.entityType,
+        entityId: input.entityId ?? null,
+        meta: input.meta ?? undefined
+      }
+    });
+  } catch (error) {
+    console.error("[dashboard] activity log write skipped", error);
+  }
+}
+
+async function safeCreateNotification(input: {
+  userId: string;
+  title: string;
+  message: string;
+}) {
+  try {
+    await prisma.notification.create({
+      data: input
+    });
+  } catch (error) {
+    console.error("[dashboard] notification write skipped", error);
+  }
+}
 
 async function requireUser() {
   const session = await auth();
@@ -77,7 +114,28 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
     select: { id: true }
   });
 
+  let resolvedCategoryId = category?.id ?? null;
+
   if (!category) {
+    const defaultCategory = await prisma.serviceCategory.upsert({
+      where: { slug: "general-legal-consultation" },
+      create: {
+        slug: "general-legal-consultation",
+        nameEn: "General legal consultation",
+        nameAr: "استشارة قانونية عامة"
+      },
+      update: {},
+      select: { id: true }
+    });
+
+    if (!defaultCategory?.id) {
+      return { error: "Selected category is unavailable. Please refresh and try again." };
+    }
+
+    resolvedCategoryId = defaultCategory.id;
+  }
+
+  if (!resolvedCategoryId) {
     return { error: "Selected category is unavailable. Please refresh and try again." };
   }
 
@@ -85,7 +143,7 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
     const created = await prisma.serviceRequest.create({
       data: {
         userId: user.id,
-        categoryId: category.id,
+        categoryId: resolvedCategoryId,
         title: parsed.data.title,
         name: dbUser.name,
         email: dbUser.email,
@@ -96,25 +154,21 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
       }
     });
 
-    await prisma.$transaction([
-      prisma.activityLog.create({
-        data: {
-          actorId: user.id,
-          action: "REQUEST_CREATED",
-          entityType: "ServiceRequest",
-          entityId: created.id,
-          meta: {
-            title: created.title,
-            status: created.status
-          }
+    await Promise.all([
+      safeCreateActivityLog({
+        actorId: user.id,
+        action: "REQUEST_CREATED",
+        entityType: "ServiceRequest",
+        entityId: created.id,
+        meta: {
+          title: created.title,
+          status: created.status
         }
       }),
-      prisma.notification.create({
-        data: {
-          userId: user.id,
-          title: "Request submitted",
-          message: `Your legal request \"${created.title ?? "Untitled"}\" has been received.`
-        }
+      safeCreateNotification({
+        userId: user.id,
+        title: "Request submitted",
+        message: `Your legal request \"${created.title ?? "Untitled"}\" has been received.`
       })
     ]);
 
@@ -169,13 +223,11 @@ export async function updateProfileAction(_: DashboardActionState, formData: For
       }
     });
 
-    await prisma.activityLog.create({
-      data: {
-        actorId: user.id,
-        action: "PROFILE_UPDATED",
-        entityType: "User",
-        entityId: user.id
-      }
+    await safeCreateActivityLog({
+      actorId: user.id,
+      action: "PROFILE_UPDATED",
+      entityType: "User",
+      entityId: user.id
     });
   } catch (error) {
     console.error("[dashboard] updateProfileAction failed", error);
@@ -187,7 +239,13 @@ export async function updateProfileAction(_: DashboardActionState, formData: For
 }
 
 export async function updateSettingsAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
-  const user = await requireUser();
+  let user: Awaited<ReturnType<typeof requireUser>>;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    console.error("[dashboard] updateSettingsAction auth error", error);
+    return { error: "Please sign in again to update your settings." };
+  }
 
   const parsed = settingsUpdateSchema.safeParse({
     language: formData.get("language"),
@@ -214,13 +272,11 @@ export async function updateSettingsAction(_: DashboardActionState, formData: Fo
     }
   });
 
-  await prisma.activityLog.create({
-    data: {
-      actorId: user.id,
-      action: "SETTINGS_UPDATED",
-      entityType: "Profile",
-      entityId: user.id
-    }
+  await safeCreateActivityLog({
+    actorId: user.id,
+    action: "SETTINGS_UPDATED",
+    entityType: "Profile",
+    entityId: user.id
   });
 
   revalidatePath("/client/dashboard/settings");
@@ -228,7 +284,13 @@ export async function updateSettingsAction(_: DashboardActionState, formData: Fo
 }
 
 export async function updateSecurityAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
-  const user = await requireUser();
+  let user: Awaited<ReturnType<typeof requireUser>>;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    console.error("[dashboard] updateSecurityAction auth error", error);
+    return { error: "Please sign in again to update your password." };
+  }
 
   const parsed = securityUpdateSchema.safeParse({
     currentPassword: formData.get("currentPassword"),
@@ -261,13 +323,11 @@ export async function updateSecurityAction(_: DashboardActionState, formData: Fo
     data: { passwordHash: newHash }
   });
 
-  await prisma.activityLog.create({
-    data: {
-      actorId: user.id,
-      action: "PASSWORD_CHANGED",
-      entityType: "User",
-      entityId: user.id
-    }
+  await safeCreateActivityLog({
+    actorId: user.id,
+    action: "PASSWORD_CHANGED",
+    entityType: "User",
+    entityId: user.id
   });
 
   return { success: "Password changed successfully." };
@@ -313,20 +373,16 @@ export async function createSupportRequestAction(_: DashboardActionState, formDa
       }
     });
 
-    await prisma.$transaction([
-      prisma.activityLog.create({
-        data: {
-          actorId: user.id,
-          action: "SUPPORT_REQUEST_CREATED",
-          entityType: "ContactInquiry"
-        }
+    await Promise.all([
+      safeCreateActivityLog({
+        actorId: user.id,
+        action: "SUPPORT_REQUEST_CREATED",
+        entityType: "ContactInquiry"
       }),
-      prisma.notification.create({
-        data: {
-          userId: user.id,
-          title: "Support request sent",
-          message: "Our legal support desk received your message and will reply soon."
-        }
+      safeCreateNotification({
+        userId: user.id,
+        title: "Support request sent",
+        message: "Our legal support desk received your message and will reply soon."
       })
     ]);
   } catch (error) {

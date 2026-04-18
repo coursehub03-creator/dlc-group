@@ -21,8 +21,12 @@ export default async function SupportPage() {
   const user = await requireDashboardUser();
 
   const supportMessages = await withSafeDashboardQuery(
-    () =>
-      prisma.contactInquiry.findMany({
+    () => {
+      if (!user.email) {
+        return Promise.resolve([]);
+      }
+
+      return prisma.contactInquiry.findMany({
         where: {
           email: user.email,
           serviceType: {
@@ -37,7 +41,8 @@ export default async function SupportPage() {
         },
         orderBy: { createdAt: "desc" },
         take: 5
-      }),
+      });
+    },
     []
   );
 
