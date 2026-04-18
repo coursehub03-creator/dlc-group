@@ -20,6 +20,13 @@ export type DashboardActionState = {
   fieldErrors?: Record<string, string[]>;
 };
 
+function isMissingTableOrColumnError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
 async function safeCreateActivityLog(input: {
   actorId?: string | null;
   action: string;
@@ -80,6 +87,33 @@ async function requireUser() {
   };
 }
 
+async function getUserWithOptionalProfile(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true }
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  try {
+    const profile = await prisma.profile.findUnique({
+      where: { userId },
+      select: { phone: true, country: true }
+    });
+
+    return { ...user, profile };
+  } catch (error) {
+    if (!isMissingTableOrColumnError(error)) {
+      throw error;
+    }
+
+    console.error("[dashboard] profile lookup skipped", error);
+    return { ...user, profile: null };
+  }
+}
+
 export async function createClientRequestAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
@@ -100,10 +134,7 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
     return { error: "Please fix the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { profile: true }
-  });
+  const dbUser = await getUserWithOptionalProfile(user.id);
 
   if (!dbUser) {
     return { error: "Unable to find your account." };
@@ -204,24 +235,32 @@ export async function updateProfileAction(_: DashboardActionState, formData: For
   try {
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        name: parsed.data.name,
-        profile: {
-          upsert: {
-            create: {
-              phone: parsed.data.phone?.trim() ? parsed.data.phone : null,
-              country: parsed.data.country?.trim() ? parsed.data.country : null,
-              language: parsed.data.language
-            },
-            update: {
-              phone: parsed.data.phone?.trim() ? parsed.data.phone : null,
-              country: parsed.data.country?.trim() ? parsed.data.country : null,
-              language: parsed.data.language
-            }
-          },
-        }
-      }
+      data: { name: parsed.data.name }
     });
+
+    try {
+      await prisma.profile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          phone: parsed.data.phone?.trim() ? parsed.data.phone : null,
+          country: parsed.data.country?.trim() ? parsed.data.country : null,
+          language: parsed.data.language
+        },
+        update: {
+          phone: parsed.data.phone?.trim() ? parsed.data.phone : null,
+          country: parsed.data.country?.trim() ? parsed.data.country : null,
+          language: parsed.data.language
+        }
+      });
+    } catch (error) {
+      if (isMissingTableOrColumnError(error)) {
+        console.error("[dashboard] profile upsert unavailable", error);
+        return { error: "Your name was updated, but phone/country storage is unavailable. Please contact support." };
+      }
+
+      throw error;
+    }
 
     await safeCreateActivityLog({
       actorId: user.id,
@@ -351,27 +390,57 @@ export async function createSupportRequestAction(_: DashboardActionState, formDa
     return { error: "Please complete the support form.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { profile: true }
-  });
+  const dbUser = await getUserWithOptionalProfile(user.id);
 
   if (!dbUser) {
     return { error: "Unable to find your account." };
   }
 
   try {
-    await prisma.contactInquiry.create({
-      data: {
-        name: dbUser.name,
-        email: dbUser.email,
-        phone: dbUser.profile?.phone || null,
-        country: dbUser.profile?.country || null,
-        serviceType: `Support: ${parsed.data.subject}`,
-        message: parsed.data.message,
-        consent: true
+    try {
+      await prisma.contactInquiry.create({
+        data: {
+          name: dbUser.name,
+          email: dbUser.email,
+          phone: dbUser.profile?.phone || null,
+          country: dbUser.profile?.country || null,
+          serviceType: `Support: ${parsed.data.subject}`,
+          message: parsed.data.message,
+          consent: true
+        }
+      });
+    } catch (error) {
+      if (!isMissingTableOrColumnError(error)) {
+        throw error;
       }
-    });
+
+      console.error("[dashboard] contact inquiry unavailable, using service requests", error);
+
+      const supportCategory = await prisma.serviceCategory.upsert({
+        where: { slug: "support" },
+        create: {
+          slug: "support",
+          nameEn: "Support",
+          nameAr: "الدعم"
+        },
+        update: {},
+        select: { id: true }
+      });
+
+      await prisma.serviceRequest.create({
+        data: {
+          userId: user.id,
+          categoryId: supportCategory.id,
+          title: `Support: ${parsed.data.subject}`,
+          name: dbUser.name,
+          email: dbUser.email,
+          phone: dbUser.profile?.phone || null,
+          country: dbUser.profile?.country || null,
+          message: parsed.data.message,
+          status: "NEW"
+        }
+      });
+    }
 
     await Promise.all([
       safeCreateActivityLog({
