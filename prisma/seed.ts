@@ -15,7 +15,13 @@ async function main() {
   await prisma.user.upsert({
     where: { email: "admin@dlcgroup.online" },
     update: {},
-    create: { email: "admin@dlcgroup.online", name: "DLC Admin", role: "ADMIN" }
+    create: {
+      email: "admin@dlcgroup.online",
+      name: "DLC Admin",
+      role: "ADMIN",
+      passwordHash:
+        "scrypt:55ac2bdb81e720f150b0326f03d22407:d570fc9a2a07f996c28a5e776e48d6ec85853c9ff5d83a9bf07ad5ad6ed1419a926e4cde7cf90d27f581066751ef9b53d3c71ed663f2b3d07fdb2379a0a31551"
+    }
   });
 
   await prisma.blogPost.createMany({
