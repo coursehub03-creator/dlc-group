@@ -37,11 +37,12 @@ const labels = {
   en: {
     title: "Client Portal",
     subtitle: "Diamond Legal Consulting",
+    visitWebsite: "Visit Website",
     nav: [
       { href: "/client/dashboard", label: "Dashboard", icon: Home },
       { href: "/client/dashboard/requests", label: "My Requests", icon: FolderKanban },
       { href: "/client/dashboard/new-request", label: "New Request", icon: PlusSquare },
-      { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
+      { href: "/client/dashboard/ai-assistant", label: "AI Assistant", icon: Bot },
       { href: "/client/dashboard/notifications", label: "Notifications", icon: Bell },
       { href: "/client/dashboard/activity", label: "Activity", icon: Activity },
       { href: "/client/dashboard/profile", label: "Profile", icon: UserCircle2 },
@@ -57,11 +58,12 @@ const labels = {
   ar: {
     title: "بوابة العميل",
     subtitle: "دايموند للاستشارات القانونية",
+    visitWebsite: "زيارة الموقع",
     nav: [
       { href: "/client/dashboard", label: "لوحة التحكم", icon: Home },
       { href: "/client/dashboard/requests", label: "طلباتي", icon: FolderKanban },
       { href: "/client/dashboard/new-request", label: "طلب جديد", icon: PlusSquare },
-      { href: "/ai-assistant", label: "المساعد الذكي", icon: Bot },
+      { href: "/client/dashboard/ai-assistant", label: "المساعد الذكي", icon: Bot },
       { href: "/client/dashboard/notifications", label: "الإشعارات", icon: Bell },
       { href: "/client/dashboard/activity", label: "النشاط", icon: Activity },
       { href: "/client/dashboard/profile", label: "الملف الشخصي", icon: UserCircle2 },
@@ -101,8 +103,13 @@ export function DashboardSidebar({ locale, isOpen, onClose, user, stats }: Dashb
         </button>
         <div className="border-b border-white/10 pb-4">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">{t.title}</p>
-          <h2 className="mt-2 text-lg font-semibold">{t.subtitle}</h2>
+          <Link href={`/client/dashboard?lang=${locale}`} className="mt-2 inline-flex text-lg font-semibold hover:text-gold">
+            {t.subtitle}
+          </Link>
           <p className="mt-2 text-xs text-slate-300">{user.email}</p>
+          <Link href={`/?lang=${locale}`} className="mt-3 inline-flex text-xs font-semibold text-slate-200 underline-offset-4 hover:text-gold hover:underline">
+            {t.visitWebsite}
+          </Link>
         </div>
 
         <nav className="mt-6 space-y-2">
