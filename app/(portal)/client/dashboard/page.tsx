@@ -134,7 +134,7 @@ export default async function ClientDashboardPage({
       <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-3 md:p-6">
         <h2 className="md:col-span-3 text-lg font-semibold text-navy">{t.quickActions}</h2>
         <Link
-          href={`/ai-assistant?lang=${locale}`}
+          href={`/client/dashboard/ai-assistant?lang=${locale}`}
           className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-700 transition hover:border-navy hover:text-navy"
         >
           {t.actions.assistant}

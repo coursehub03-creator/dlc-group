@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Menu } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
@@ -17,11 +18,13 @@ type DashboardHeaderProps = {
 const copy = {
   en: {
     role: "Role",
-    logout: "Logout"
+    logout: "Logout",
+    workspace: "Client Workspace"
   },
   ar: {
     role: "الدور",
-    logout: "تسجيل الخروج"
+    logout: "تسجيل الخروج",
+    workspace: "مساحة العميل"
   }
 } as const;
 
@@ -40,6 +43,9 @@ export function DashboardHeader({ locale, onMenuClick, user }: DashboardHeaderPr
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0">
+            <Link href={`/client/dashboard?lang=${locale}`} className="text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-navy">
+              {t.workspace}
+            </Link>
             <p className="truncate text-sm font-semibold text-navy">{user.name}</p>
             <p className="truncate text-xs text-slate-500">{user.email}</p>
           </div>

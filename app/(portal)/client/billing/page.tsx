@@ -1,1 +1,5 @@
-export default function Page(){return <section className="p-8"><h1 className="text-2xl font-semibold">Client billing</h1><p className="text-slate-600">Client portal section for billing.</p></section>}
+import { redirect } from "next/navigation";
+
+export default function ClientBillingLegacyPage() {
+  redirect("/client/dashboard/billing");
+}

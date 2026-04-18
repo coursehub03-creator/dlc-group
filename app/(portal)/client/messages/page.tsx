@@ -1,1 +1,5 @@
-export default function Page(){return <section className="p-8"><h1 className="text-2xl font-semibold">Client messages</h1><p className="text-slate-600">Client portal section for messages.</p></section>}
+import { redirect } from "next/navigation";
+
+export default function ClientMessagesLegacyPage() {
+  redirect("/client/dashboard/ai-assistant");
+}
