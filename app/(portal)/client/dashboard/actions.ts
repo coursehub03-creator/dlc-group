@@ -182,14 +182,19 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
     return { error: "Selected category is unavailable. Please refresh and try again." };
   }
 
+  let created: { id: string; subject: string };
   try {
-    const created = await prisma.legalRequest.create({
+    created = await prisma.legalRequest.create({
       data: {
         userId: user.id,
         categoryId: resolvedCategoryId,
         subject: parsed.data.title,
         details: parsed.data.message,
         country: parsed.data.country || dbUser.profile?.country || null,
+      },
+      select: {
+        id: true,
+        subject: true,
       }
     });
 
@@ -209,14 +214,19 @@ export async function createClientRequestAction(_: DashboardActionState, formDat
         message: `Your legal request \"${created.subject}\" has been received.`
       })
     ]);
-
-    revalidatePath("/client/dashboard");
-    revalidatePath("/client/dashboard/requests");
-    redirect("/client/dashboard/requests?created=1");
   } catch (error) {
     console.error("[dashboard] createClientRequestAction failed", error);
     return { error: "We could not submit your request right now. Please try again." };
   }
+
+  try {
+    revalidatePath("/client/dashboard");
+    revalidatePath("/client/dashboard/requests");
+  } catch (error) {
+    console.error("[dashboard] createClientRequestAction revalidate skipped", error);
+  }
+
+  redirect("/client/dashboard/requests?created=1");
 }
 
 export async function updateProfileAction(_: DashboardActionState, formData: FormData): Promise<DashboardActionState> {
