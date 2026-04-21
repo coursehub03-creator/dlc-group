@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { RequestStatusBadge } from "../../components/request-status-badge";
 import { requireDashboardUser, withSafeDashboardQuery } from "../../lib/server-utils";
 
 export default async function RequestDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,7 +13,7 @@ export default async function RequestDetailsPage({ params }: { params: Promise<{
 
   const request = await withSafeDashboardQuery(
     () =>
-      prisma.serviceRequest.findFirst({
+      prisma.legalRequest.findFirst({
         where: {
           id,
           userId: user.id
@@ -26,13 +25,6 @@ export default async function RequestDetailsPage({ params }: { params: Promise<{
               nameAr: true
             }
           },
-          case: {
-            include: {
-              history: {
-                orderBy: { createdAt: "asc" }
-              }
-            }
-          }
         }
       }),
     null
@@ -48,17 +40,6 @@ export default async function RequestDetailsPage({ params }: { params: Promise<{
       label: "Request submitted",
       date: request.createdAt
     },
-    ...(request.case?.history.map((item) => ({
-      id: item.id,
-      label: item.status.replaceAll("_", " "),
-      note: item.note,
-      date: item.createdAt
-    })) ?? []),
-    {
-      id: `${request.id}-updated`,
-      label: "Last updated",
-      date: request.updatedAt
-    }
   ];
 
   return (
@@ -66,26 +47,22 @@ export default async function RequestDetailsPage({ params }: { params: Promise<{
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-navy">{request.title ?? request.category?.nameEn ?? "General request"}</h1>
+            <h1 className="text-2xl font-semibold text-navy">{request.subject}</h1>
             <p className="mt-1 text-sm text-slate-600">{request.category?.nameEn ?? "General"} / {request.category?.nameAr ?? "عام"}</p>
           </div>
-          <RequestStatusBadge status={request.status} />
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">SUBMITTED</span>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-navy">Request details</h2>
-          <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{request.message}</p>
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{request.details}</p>
 
           <dl className="mt-6 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-3">
               <dt className="text-xs uppercase tracking-wide text-slate-500">Created</dt>
               <dd className="mt-1 font-medium text-slate-800">{new Date(request.createdAt).toLocaleString("en-US")}</dd>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3">
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Updated</dt>
-              <dd className="mt-1 font-medium text-slate-800">{new Date(request.updatedAt).toLocaleString("en-US")}</dd>
             </div>
             <div className="rounded-xl bg-slate-50 p-3">
               <dt className="text-xs uppercase tracking-wide text-slate-500">Country</dt>

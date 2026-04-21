@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { RequestStatusBadge } from "../components/request-status-badge";
 import { requireDashboardUser, withSafeDashboardQuery } from "../lib/server-utils";
 
 export default async function RequestsPage({
@@ -14,7 +13,7 @@ export default async function RequestsPage({
 
   const requests = await withSafeDashboardQuery(
     () =>
-      prisma.serviceRequest.findMany({
+      prisma.legalRequest.findMany({
         where: { userId: user.id },
         include: {
           category: {
@@ -56,9 +55,9 @@ export default async function RequestsPage({
             <thead className="bg-slate-50">
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
                 <th className="px-4 py-3">Request</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">Country</th>
                 <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3">Updated</th>
                 <th className="px-4 py-3">Summary</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -67,16 +66,15 @@ export default async function RequestsPage({
               {requests.map((request) => (
                 <tr key={request.id}>
                   <td className="px-4 py-4">
-                    <p className="font-semibold text-slate-800">{request.title ?? request.category?.nameEn ?? "General request"}</p>
-                    <p className="text-xs text-slate-500">{request.category?.nameEn ?? "General"} / {request.category?.nameAr ?? "عام"}</p>
+                    <p className="font-semibold text-slate-800">{request.subject}</p>
                   </td>
                   <td className="px-4 py-4">
-                    <RequestStatusBadge status={request.status} />
+                    <p className="text-xs text-slate-500">{request.category?.nameEn ?? "General"} / {request.category?.nameAr ?? "عام"}</p>
                   </td>
+                  <td className="px-4 py-4 text-slate-600">{request.country ?? "—"}</td>
                   <td className="px-4 py-4 text-slate-600">{new Date(request.createdAt).toLocaleDateString("en-US")}</td>
-                  <td className="px-4 py-4 text-slate-600">{new Date(request.updatedAt).toLocaleDateString("en-US")}</td>
                   <td className="max-w-xs px-4 py-4 text-slate-600">
-                    <p className="line-clamp-2">{request.message}</p>
+                    <p className="line-clamp-2">{request.details}</p>
                   </td>
                   <td className="px-4 py-4 text-right">
                     <Link href={`/client/dashboard/requests/${request.id}`} className="font-semibold text-navy hover:text-gold">
