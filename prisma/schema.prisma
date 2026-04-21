@@ -74,6 +74,7 @@ model User {
   passwordHash    String
   name            String?
   role            RoleType         @default(CLIENT)
+  isActive        Boolean          @default(true)
   profile         Profile?
   accounts        Account[]
   sessions        Session[]
@@ -81,6 +82,7 @@ model User {
   legalRequests   LegalRequest[]
   aiConversations AIConversation[]
   notifications   Notification[]
+  sentNotifications Notification[] @relation("NotificationSender")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -132,7 +134,10 @@ model LegalRequest {
   subject    String
   details    String
   country    String?
+  status     RequestStatus   @default(NEW)
+  adminNote  String?
   createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
   user       User            @relation(fields: [userId], references: [id])
   category   ServiceCategory @relation(fields: [categoryId], references: [id])
 }
@@ -160,10 +165,13 @@ model ServiceRequest {
 model Notification {
   id        String    @id @default(cuid())
   userId    String
+  senderId  String?
   title     String
   message   String
   readAt    DateTime?
+  audience  String?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender    User?     @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
@@ -290,6 +298,17 @@ model Testimonial {
   updatedAt DateTime @updatedAt
 }
 
+
+model SiteContent {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  titleEn   String
+  titleAr   String
+  bodyEn    String?
+  bodyAr    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 model AIConversation {
   id        String      @id @default(cuid())
   userId    String
@@ -319,6 +338,8 @@ model ContactInquiry {
   serviceType String?
   message     String
   consent     Boolean  @default(false)
+  reviewedAt  DateTime?
+  adminNote   String?
   createdAt   DateTime @default(now())
 }
 
