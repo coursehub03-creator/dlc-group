@@ -46,15 +46,6 @@ const copy = {
   }
 } as const;
 
-const statusClass: Record<string, string> = {
-  NEW: "bg-blue-50 text-blue-700",
-  UNDER_REVIEW: "bg-amber-50 text-amber-700",
-  IN_PROGRESS: "bg-violet-50 text-violet-700",
-  NEEDS_CLARIFICATION: "bg-orange-50 text-orange-700",
-  COMPLETED: "bg-emerald-50 text-emerald-700",
-  CLOSED: "bg-slate-100 text-slate-700"
-};
-
 export default async function ClientDashboardPage({
   searchParams
 }: {
@@ -69,16 +60,14 @@ export default async function ClientDashboardPage({
   const [stats, recentRequests] = await Promise.all([
     withSafeDashboardQuery(
       () =>
-        prisma.serviceRequest.groupBy({
-          by: ["status"],
-          where: { userId: user.id },
-          _count: { _all: true }
+        prisma.legalRequest.count({
+          where: { userId: user.id }
         }),
-      []
+      0
     ),
     withSafeDashboardQuery(
       () =>
-        prisma.serviceRequest.findMany({
+        prisma.legalRequest.findMany({
           where: { userId: user.id },
           orderBy: { createdAt: "desc" },
           take: 5,
@@ -95,26 +84,11 @@ export default async function ClientDashboardPage({
     )
   ]);
 
-  const totals = stats.reduce(
-    (acc, item) => {
-      acc.totalConsultations += item._count._all;
-
-      if (["NEW", "UNDER_REVIEW", "IN_PROGRESS", "NEEDS_CLARIFICATION"].includes(item.status)) {
-        acc.activeRequests += item._count._all;
-      }
-
-      if (["COMPLETED", "CLOSED"].includes(item.status)) {
-        acc.completedRequests += item._count._all;
-      }
-
-      return acc;
-    },
-    {
-      totalConsultations: 0,
-      activeRequests: 0,
-      completedRequests: 0
-    }
-  );
+  const totals = {
+    totalConsultations: stats,
+    activeRequests: stats,
+    completedRequests: 0
+  };
 
   return (
     <section className="space-y-8">
@@ -174,11 +148,12 @@ export default async function ClientDashboardPage({
                   <p className="font-medium text-slate-800">
                     {locale === "ar" ? request.category?.nameAr ?? request.category?.nameEn ?? "General request" : request.category?.nameEn ?? request.category?.nameAr ?? "General request"}
                   </p>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass[request.status] ?? "bg-slate-100 text-slate-700"}`}>
-                    {t.status}: {request.status.replaceAll("_", " ")}
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    {t.status}: SUBMITTED
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-2 text-sm text-slate-600">{request.message}</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{request.subject}</p>
+                <p className="mt-1 line-clamp-2 text-sm text-slate-600">{request.details}</p>
                 <p className="mt-2 text-xs text-slate-500">{new Date(request.createdAt).toLocaleDateString(locale === "ar" ? "ar" : "en-US")}</p>
               </li>
             ))}
