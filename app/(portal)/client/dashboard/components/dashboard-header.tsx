@@ -30,6 +30,7 @@ const copy = {
 
 export function DashboardHeader({ locale, onMenuClick, user }: DashboardHeaderProps) {
   const t = copy[locale];
+  const isAdmin = user.role === "ADMIN";
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur md:px-8">
@@ -51,7 +52,13 @@ export function DashboardHeader({ locale, onMenuClick, user }: DashboardHeaderPr
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 sm:inline-flex">
+          <span
+            className={`hidden rounded-full border px-3 py-1 text-xs font-semibold sm:inline-flex ${
+              isAdmin
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-slate-200 bg-slate-100 text-slate-600"
+            }`}
+          >
             {t.role}: {user.role}
           </span>
           <LanguageSwitcher />

@@ -39,10 +39,11 @@ const authActions = {
 export function SiteShellClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const params = useSearchParams();
-  const { status } = useSession();
+  const { status, data } = useSession();
   const locale = params.get("lang") === "ar" ? "ar" : "en";
   const dir = locale === "ar" ? "rtl" : "ltr";
   const t = authActions[locale];
+  const isAdmin = data?.user && (data.user as { role?: string }).role === "ADMIN";
 
   const withLocale = (href: string) => `${href}?lang=${locale}`;
 
@@ -74,6 +75,14 @@ export function SiteShellClient({ children }: { children: React.ReactNode }) {
                 >
                   {t.dashboard}
                 </Link>
+                {isAdmin ? (
+                  <Link
+                    href={withLocale("/admin/dashboard")}
+                    className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition hover:border-amber-400 hover:bg-amber-100"
+                  >
+                    Admin Dashboard
+                  </Link>
+                ) : null}
                 <button
                   onClick={() => signOut({ callbackUrl: withLocale("/") })}
                   className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
