@@ -80,6 +80,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     jwt: async ({ token, user }) => {
       if (user) {
         token.role = (user as { role?: string }).role ?? "CLIENT";
+        token.email = user.email ?? token.email;
       }
 
       return token;
@@ -88,6 +89,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         (session.user as { id?: string; role?: string }).id = token.sub;
         (session.user as { id?: string; role?: string }).role = String(token.role ?? "CLIENT");
+        session.user.email = typeof token.email === "string" ? token.email : session.user.email;
       }
 
       return session;
