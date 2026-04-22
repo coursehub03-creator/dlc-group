@@ -1,8 +1,10 @@
-import { broadcastNotificationAction, deleteNotificationAction, markNotificationReadAction, sendNotificationAction } from "../actions";
+import { broadcastNotificationAction, deleteNotificationAction, markNotificationReadAction, markNotificationUnreadAction, sendNotificationAction } from "../actions";
 import { prisma } from "@/lib/db/prisma";
+import { getAdminLang } from "@/lib/admin/i18n";
 
-export default async function AdminNotificationsPage({ searchParams }: { searchParams: Promise<{ userId?: string; state?: string }> }) {
+export default async function AdminNotificationsPage({ searchParams }: { searchParams: Promise<{ userId?: string; state?: string; lang?: string }> }) {
   const params = await searchParams;
+  const lang = getAdminLang(params.lang);
   const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, email: true, role: true }, orderBy: { createdAt: "desc" }, take: 200 });
   const notifications = await prisma.notification.findMany({
     where: {
@@ -17,31 +19,32 @@ export default async function AdminNotificationsPage({ searchParams }: { searchP
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-navy">Notifications</h1>
+      <h1 className="text-2xl font-semibold text-navy">{lang === "ar" ? "الإشعارات" : "Notifications"}</h1>
       <div className="grid gap-4 lg:grid-cols-2">
         <form action={sendNotificationAction} className="rounded-xl border bg-white p-4 text-sm">
-          <h2 className="font-semibold">Send notification to one user</h2>
+          <h2 className="font-semibold">{lang === "ar" ? "إرسال إشعار لمستخدم" : "Send notification to one user"}</h2>
           <select name="userId" className="mt-2 w-full rounded border px-3 py-2" required>{users.map((u) => <option key={u.id} value={u.id}>{u.email} ({u.role})</option>)}</select>
-          <input name="title" placeholder="Title" className="mt-2 w-full rounded border px-3 py-2" required />
-          <textarea name="message" placeholder="Message" className="mt-2 w-full rounded border px-3 py-2" rows={3} required />
-          <button className="mt-2 rounded bg-navy px-3 py-2 text-white">Send</button>
+          <input name="title" placeholder={lang === "ar" ? "العنوان" : "Title"} className="mt-2 w-full rounded border px-3 py-2" required />
+          <textarea name="message" placeholder={lang === "ar" ? "الرسالة" : "Message"} className="mt-2 w-full rounded border px-3 py-2" rows={3} required />
+          <button className="mt-2 rounded bg-navy px-3 py-2 text-white">{lang === "ar" ? "إرسال" : "Send"}</button>
         </form>
         <form action={broadcastNotificationAction} className="rounded-xl border bg-white p-4 text-sm">
-          <h2 className="font-semibold">Broadcast notification</h2>
-          <select name="audience" className="mt-2 w-full rounded border px-3 py-2"><option value="ALL_USERS">All users</option><option value="CLIENTS">All clients</option></select>
-          <input name="title" placeholder="Title" className="mt-2 w-full rounded border px-3 py-2" required />
-          <textarea name="message" placeholder="Message" className="mt-2 w-full rounded border px-3 py-2" rows={3} required />
-          <button className="mt-2 rounded bg-gold px-3 py-2 font-semibold text-navy">Broadcast</button>
+          <h2 className="font-semibold">{lang === "ar" ? "إرسال جماعي" : "Broadcast notification"}</h2>
+          <select name="audience" className="mt-2 w-full rounded border px-3 py-2"><option value="ALL_USERS">{lang === "ar" ? "كل المستخدمين" : "All users"}</option><option value="CLIENTS">{lang === "ar" ? "كل العملاء" : "All clients"}</option></select>
+          <input name="title" placeholder={lang === "ar" ? "العنوان" : "Title"} className="mt-2 w-full rounded border px-3 py-2" required />
+          <textarea name="message" placeholder={lang === "ar" ? "الرسالة" : "Message"} className="mt-2 w-full rounded border px-3 py-2" rows={3} required />
+          <button className="mt-2 rounded bg-gold px-3 py-2 font-semibold text-navy">{lang === "ar" ? "إرسال جماعي" : "Broadcast"}</button>
         </form>
       </div>
 
       <div className="rounded-xl border bg-white p-4">
         <form className="mb-3 grid gap-2 md:grid-cols-3">
-          <select name="userId" defaultValue={params.userId ?? ""} className="rounded border px-3 py-2 text-sm"><option value="">All users</option>{users.map((u) => <option key={u.id} value={u.id}>{u.email}</option>)}</select>
-          <select name="state" defaultValue={params.state ?? ""} className="rounded border px-3 py-2 text-sm"><option value="">All</option><option value="unread">Unread</option><option value="read">Read</option></select>
-          <button className="rounded border px-3 py-2 text-sm">Filter</button>
+          <input type="hidden" name="lang" value={lang} />
+          <select name="userId" defaultValue={params.userId ?? ""} className="rounded border px-3 py-2 text-sm"><option value="">{lang === "ar" ? "كل المستخدمين" : "All users"}</option>{users.map((u) => <option key={u.id} value={u.id}>{u.email}</option>)}</select>
+          <select name="state" defaultValue={params.state ?? ""} className="rounded border px-3 py-2 text-sm"><option value="">{lang === "ar" ? "الكل" : "All"}</option><option value="unread">{lang === "ar" ? "غير مقروء" : "Unread"}</option><option value="read">{lang === "ar" ? "مقروء" : "Read"}</option></select>
+          <button className="rounded border px-3 py-2 text-sm">{lang === "ar" ? "تصفية" : "Filter"}</button>
         </form>
-        <div className="space-y-2 text-sm">{notifications.map((n) => <div key={n.id} className="rounded border p-3"><p className="font-semibold">{n.title}</p><p>{n.message}</p><p className="text-xs text-slate-500">to {n.user.email} · by {n.sender?.email ?? "system"}</p><div className="mt-2 flex gap-2"><form action={markNotificationReadAction}><input type="hidden" name="notificationId" value={n.id} /><button className="rounded border px-2 py-1 text-xs">Mark read</button></form><form action={deleteNotificationAction}><input type="hidden" name="notificationId" value={n.id} /><button className="rounded border px-2 py-1 text-xs">Delete</button></form></div></div>)}</div>
+        <div className="space-y-2 text-sm">{notifications.map((n) => <div key={n.id} className="rounded border p-3"><p className="font-semibold">{n.title}</p><p>{n.message}</p><p className="text-xs text-slate-500">{lang === "ar" ? "إلى" : "to"} {n.user.email} · {lang === "ar" ? "بواسطة" : "by"} {n.sender?.email ?? "system"}</p><div className="mt-2 flex gap-2">{n.readAt ? <form action={markNotificationUnreadAction}><input type="hidden" name="notificationId" value={n.id} /><button className="rounded border px-2 py-1 text-xs">{lang === "ar" ? "تعيين كغير مقروء" : "Mark unread"}</button></form> : <form action={markNotificationReadAction}><input type="hidden" name="notificationId" value={n.id} /><button className="rounded border px-2 py-1 text-xs">{lang === "ar" ? "تعيين كمقروء" : "Mark read"}</button></form>}<form action={deleteNotificationAction}><input type="hidden" name="notificationId" value={n.id} /><button className="rounded border px-2 py-1 text-xs">{lang === "ar" ? "حذف" : "Delete"}</button></form></div></div>)}</div>
       </div>
     </div>
   );
