@@ -157,6 +157,14 @@ export async function markNotificationReadAction(formData: FormData) {
   revalidatePath("/admin/dashboard/notifications");
 }
 
+export async function markNotificationUnreadAction(formData: FormData) {
+  await requireAdminUser();
+  const id = String(formData.get("notificationId") ?? "");
+  if (!id) return;
+  await prisma.notification.update({ where: { id }, data: { readAt: null } });
+  revalidatePath("/admin/dashboard/notifications");
+}
+
 export async function deleteNotificationAction(formData: FormData) {
   await requireAdminUser();
   const id = String(formData.get("notificationId") ?? "");
