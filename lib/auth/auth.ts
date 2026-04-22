@@ -95,7 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     redirect: async ({ url, baseUrl }) => {
-      const dashboardUrl = `${baseUrl}/client/dashboard`;
+      const dashboardUrl = `${baseUrl}/dashboard`;
 
       try {
         if (url.startsWith("/")) {
