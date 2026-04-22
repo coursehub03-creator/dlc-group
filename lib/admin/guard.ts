@@ -17,16 +17,40 @@ export async function requireAdminUser() {
     redirect("/auth/sign-in?callbackUrl=/admin/dashboard");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id },
-    select: { id: true, name: true, email: true, role: true, isActive: true }
-  });
+  const user = await getAdminUserForGuard(id);
 
   if (!user || !user.isActive || user.role !== "ADMIN") {
     redirect("/client/dashboard");
   }
 
   return user;
+}
+
+async function getAdminUserForGuard(id: string) {
+  try {
+    return await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, name: true, email: true, role: true, isActive: true }
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2021" || error.code === "P2022")
+    ) {
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, name: true, email: true, role: true }
+      });
+
+      if (!user) {
+        return null;
+      }
+
+      return { ...user, isActive: true };
+    }
+
+    throw error;
+  }
 }
 
 export async function withSafeAdminQuery<T>(query: () => Promise<T>, fallback: T): Promise<T> {
