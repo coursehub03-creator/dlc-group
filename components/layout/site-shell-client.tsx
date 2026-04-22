@@ -43,7 +43,8 @@ export function SiteShellClient({ children }: { children: React.ReactNode }) {
   const locale = params.get("lang") === "ar" ? "ar" : "en";
   const dir = locale === "ar" ? "rtl" : "ltr";
   const t = authActions[locale];
-  const isAdmin = data?.user && (data.user as { role?: string }).role === "ADMIN";
+  const sessionRole = String((data?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
+  const isAdmin = sessionRole === "ADMIN";
 
   const withLocale = (href: string) => `${href}?lang=${locale}`;
 
