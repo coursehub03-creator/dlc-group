@@ -80,20 +80,26 @@ export async function adminSignOutAction() {
 export async function updateUserAction(formData: FormData) {
   const admin = await requireAdminUser();
 
-  console.error("[admin-users:update] raw form data", {
-    entries: Object.fromEntries(formData.entries())
-  });
+  const lang = getLang(formData);
 
-  const rawUserId = formData.get("userId");
-  const rawName = formData.get("name");
-  const rawRole = formData.get("role");
+  const rawUserId =
+    formData.get("userId") ??
+    formData.get("id") ??
+    formData.get("targetUserId");
+
+  const rawName =
+    formData.get("name") ??
+    formData.get("fullName");
+
+  const rawRole =
+    formData.get("role") ??
+    formData.get("userRole");
 
   const userId = typeof rawUserId === "string" ? rawUserId.trim() : "";
   const name = typeof rawName === "string" ? rawName.trim() : "";
   const role = normalizeRole(rawRole);
-  const lang = getLang(formData);
 
-  console.error("[admin-users:update] parsed payload", {
+  console.error("[admin-users:update] final parsed payload", {
     userId,
     name,
     rawRole,
@@ -102,15 +108,7 @@ export async function updateUserAction(formData: FormData) {
   });
 
   if (!userId || !role) {
-    console.error("[admin-users:update] validation failed", {
-      userId,
-      name,
-      rawRole,
-      role,
-      reason: !userId ? "missing userId" : "invalid role"
-    });
-
-    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
+    redirect(`/admin/dashboard/users?lang=${lang}&error=invalid_user_payload`);
   }
 
   try {
@@ -121,7 +119,13 @@ export async function updateUserAction(formData: FormData) {
         role
       }
     });
+  } catch (error) {
+    console.error("[admin-users:update] prisma user update failed", error);
+    redirect(`/admin/dashboard/users?lang=${lang}&error=user_update_failed`);
+  }
 
+  // مهم: لا تجعل فشل سجل النشاط يفشل تحديث المستخدم
+  try {
     await createActivityLog({
       actorId: admin.id,
       action: "ADMIN_USER_UPDATED",
@@ -130,15 +134,12 @@ export async function updateUserAction(formData: FormData) {
       meta: { role }
     });
   } catch (error) {
-    console.error("[admin-users] failed to update user", error);
-
-    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
+    console.error("[admin-users:update] activity log failed but user update succeeded", error);
   }
 
   revalidatePath("/admin/dashboard/users");
-  redirect(buildUsersRedirect(formData, { updated: "1" }));
+  redirect(`/admin/dashboard/users?lang=${lang}&updated=1`);
 }
-
 export async function updateLegalRequestAction(formData: FormData) {
   const admin = await requireAdminUser();
   const requestId = String(formData.get("requestId") ?? "");
