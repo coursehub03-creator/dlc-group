@@ -4,14 +4,13 @@ import { prisma } from "@/lib/db/prisma";
 import { adminText, getAdminLang, localeFor } from "@/lib/admin/i18n";
 import { withSafeAdminQuery } from "@/lib/admin/guard";
 
-type UsersSearchParams = Promise<{ q?: string; role?: string; lang?: string }>;
+type UsersSearchParams = Promise<{ q?: string; role?: string; page?: string; lang?: string }>;
 
 type UserRow = {
   id: string;
   email: string;
   name: string | null;
   role: RoleType;
-  isActive: boolean;
   createdAt: Date;
   profile: {
     phone: string | null;
@@ -24,7 +23,9 @@ const USERS_TAKE_LIMIT = 60;
 
 function resolveRoleFilter(value?: string): RoleType | undefined {
   if (!value) return undefined;
-  return Object.values(RoleType).includes(value as RoleType) ? (value as RoleType) : undefined;
+
+  const normalized = value.trim().toUpperCase();
+  return Object.values(RoleType).includes(normalized as RoleType) ? (normalized as RoleType) : undefined;
 }
 
 function formatCreatedAt(value: Date | null | undefined, lang: "en" | "ar") {
@@ -41,7 +42,7 @@ function formatCreatedAt(value: Date | null | undefined, lang: "en" | "ar") {
   }
 }
 
-async function getUsers(q: string, role: RoleType | undefined): Promise<UserRow[]> {
+async function getUsers(q: string, role: RoleType | undefined, page: number): Promise<UserRow[]> {
   const where: Prisma.UserWhereInput = {
     ...(q
       ? {
@@ -63,10 +64,10 @@ async function getUsers(q: string, role: RoleType | undefined): Promise<UserRow[
           email: true,
           name: true,
           role: true,
-          isActive: true,
           createdAt: true
         },
         orderBy: { createdAt: "desc" },
+        skip: (page - 1) * USERS_TAKE_LIMIT,
         take: USERS_TAKE_LIMIT
       }),
     [] as Array<{
@@ -74,7 +75,6 @@ async function getUsers(q: string, role: RoleType | undefined): Promise<UserRow[
       email: string;
       name: string | null;
       role: RoleType;
-      isActive: boolean;
       createdAt: Date;
     }>
   );
@@ -113,8 +113,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
 
   const q = params.q?.trim() ?? "";
   const role = resolveRoleFilter(params.role);
+  const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
 
-  const users = await getUsers(q, role);
+  const users = await getUsers(q, role, page);
 
   const fallbackName = lang === "ar" ? "مستخدم بدون اسم" : "Unnamed user";
   const tableHeaders = {
@@ -123,7 +124,6 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
     phone: lang === "ar" ? "الهاتف" : "Phone",
     country: lang === "ar" ? "الدولة" : "Country",
     role: lang === "ar" ? "الدور" : "Role",
-    active: lang === "ar" ? "الحالة" : "Status",
     created: lang === "ar" ? "تاريخ الإنشاء" : "Created",
     actions: lang === "ar" ? "إجراءات" : "Actions"
   };
@@ -151,6 +151,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
         <button className="rounded bg-navy px-3 py-2 text-sm font-semibold text-white">{t.common.filter}</button>
       </form>
 
+      <div className="text-sm text-slate-600">{lang === "ar" ? `عرض ${users.length} مستخدم` : `Showing ${users.length} users`}</div>
+
       {users.length === 0 ? (
         <div className="rounded-xl border bg-white p-6 text-sm text-slate-500">
           {lang === "ar" ? "لا يوجد مستخدمون مطابقون للبحث أو الفلتر الحالي." : "No users found for the current search or filter."}
@@ -165,7 +167,6 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                 <th className="px-3 py-2 text-start font-semibold">{tableHeaders.phone}</th>
                 <th className="px-3 py-2 text-start font-semibold">{tableHeaders.country}</th>
                 <th className="px-3 py-2 text-start font-semibold">{tableHeaders.role}</th>
-                <th className="px-3 py-2 text-start font-semibold">{tableHeaders.active}</th>
                 <th className="px-3 py-2 text-start font-semibold">{tableHeaders.created}</th>
                 <th className="px-3 py-2 text-start font-semibold">{tableHeaders.actions}</th>
               </tr>
@@ -178,7 +179,6 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                   <td className="px-3 py-3">{user.profile?.phone?.trim() || "-"}</td>
                   <td className="px-3 py-3">{user.profile?.country?.trim() || "-"}</td>
                   <td className="px-3 py-3">{user.role || "CLIENT"}</td>
-                  <td className="px-3 py-3">{user.isActive ? (lang === "ar" ? "نشط" : "Active") : lang === "ar" ? "غير نشط" : "Inactive"}</td>
                   <td className="px-3 py-3">{formatCreatedAt(user.createdAt, lang)}</td>
                   <td className="px-3 py-3">
                     <form action={updateUserAction} className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
@@ -191,10 +191,6 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                           </option>
                         ))}
                       </select>
-                      <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
-                        <input type="checkbox" name="isActive" defaultChecked={Boolean(user.isActive)} />
-                        {lang === "ar" ? "نشط" : "Active"}
-                      </label>
                       <button className="rounded bg-gold px-3 py-2 text-sm font-semibold text-navy md:col-span-3">{t.common.save}</button>
                     </form>
                   </td>
