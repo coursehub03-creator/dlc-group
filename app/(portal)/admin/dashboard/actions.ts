@@ -9,29 +9,69 @@ import { createActivityLog } from "@/lib/admin/activity";
 import { requireAdminUser } from "@/lib/admin/guard";
 import { prisma } from "@/lib/db/prisma";
 
-const allowedRoles = new Set<RoleType>([RoleType.GUEST, RoleType.CLIENT, RoleType.LEGAL_STAFF, RoleType.ADMIN]);
+const allowedRoles = new Set<RoleType>([
+  RoleType.GUEST,
+  RoleType.CLIENT,
+  RoleType.LEGAL_STAFF,
+  RoleType.ADMIN
+]);
 
 function normalizeRole(value: FormDataEntryValue | null): RoleType | undefined {
   if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toUpperCase();
+
+  const raw = value.trim();
+  const normalized = raw.toUpperCase().replace(/\s+/g, "_");
+
+  const roleAliases: Record<string, RoleType> = {
+    GUEST: RoleType.GUEST,
+    زائر: RoleType.GUEST,
+
+    CLIENT: RoleType.CLIENT,
+    Client: RoleType.CLIENT,
+    client: RoleType.CLIENT,
+    عميل: RoleType.CLIENT,
+
+    LEGAL_STAFF: RoleType.LEGAL_STAFF,
+    "LEGAL STAFF": RoleType.LEGAL_STAFF,
+    "Legal Staff": RoleType.LEGAL_STAFF,
+    "legal staff": RoleType.LEGAL_STAFF,
+    "فريق قانوني": RoleType.LEGAL_STAFF,
+
+    ADMIN: RoleType.ADMIN,
+    Admin: RoleType.ADMIN,
+    admin: RoleType.ADMIN,
+    مدير: RoleType.ADMIN,
+    أدمن: RoleType.ADMIN
+  };
+
+  const mapped = roleAliases[raw] ?? roleAliases[normalized];
+
+  if (mapped && allowedRoles.has(mapped)) {
+    return mapped;
+  }
+
   return allowedRoles.has(normalized as RoleType) ? (normalized as RoleType) : undefined;
 }
 
-function buildUsersRedirect(formData: FormData, overrides?: { error?: string }) {
+function getLang(formData: FormData) {
+  return String(formData.get("lang") ?? "en").trim().toLowerCase() === "ar" ? "ar" : "en";
+}
+
+function buildUsersRedirect(formData: FormData, overrides?: { error?: string; updated?: string }) {
   const params = new URLSearchParams();
   const q = String(formData.get("q") ?? "").trim();
-  const lang = String(formData.get("lang") ?? "en").trim().toLowerCase();
+  const lang = getLang(formData);
   const role = normalizeRole(formData.get("currentRole"));
 
   if (q) params.set("q", q);
-  params.set("lang", lang === "ar" ? "ar" : "en");
+  params.set("lang", lang);
   if (role) params.set("role", role);
   if (overrides?.error) params.set("error", overrides.error);
+  if (overrides?.updated) params.set("updated", overrides.updated);
 
   const query = params.toString();
   return `/admin/dashboard/users${query ? `?${query}` : ""}`;
 }
-
 
 export async function adminSignOutAction() {
   await signOut({ redirectTo: "/auth/sign-in" });
@@ -39,6 +79,7 @@ export async function adminSignOutAction() {
 
 export async function updateUserAction(formData: FormData) {
   const admin = await requireAdminUser();
+
   console.error("[admin-users:update] raw form data", {
     entries: Object.fromEntries(formData.entries())
   });
@@ -46,30 +87,30 @@ export async function updateUserAction(formData: FormData) {
   const rawUserId = formData.get("userId");
   const rawName = formData.get("name");
   const rawRole = formData.get("role");
-  const rawLang = formData.get("lang");
 
-  const userId = typeof rawUserId === "string" ? rawUserId : "";
+  const userId = typeof rawUserId === "string" ? rawUserId.trim() : "";
   const name = typeof rawName === "string" ? rawName.trim() : "";
-  const role = typeof rawRole === "string" ? rawRole : "";
-  const lang = rawLang === "ar" ? "ar" : "en";
+  const role = normalizeRole(rawRole);
+  const lang = getLang(formData);
 
   console.error("[admin-users:update] parsed payload", {
     userId,
     name,
+    rawRole,
     role,
     lang
   });
 
-  const allowedRoleValues: RoleType[] = [RoleType.GUEST, RoleType.CLIENT, RoleType.LEGAL_STAFF, RoleType.ADMIN];
-
-  if (!userId || !allowedRoleValues.includes(role as RoleType)) {
+  if (!userId || !role) {
     console.error("[admin-users:update] validation failed", {
       userId,
       name,
+      rawRole,
       role,
       reason: !userId ? "missing userId" : "invalid role"
     });
-    redirect(`/admin/dashboard/users?lang=${lang}&error=invalid_user_payload`);
+
+    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
   }
 
   try {
@@ -77,7 +118,7 @@ export async function updateUserAction(formData: FormData) {
       where: { id: userId },
       data: {
         name: name || null,
-        role: role as RoleType
+        role
       }
     });
 
@@ -89,18 +130,13 @@ export async function updateUserAction(formData: FormData) {
       meta: { role }
     });
   } catch (error) {
-    console.error("[admin-users:update] validation failed", {
-      userId,
-      name,
-      role,
-      reason: "update query failed"
-    });
-    console.error("[admin-users] failed to update role", error);
-    redirect(`/admin/dashboard/users?lang=${lang}&error=invalid_user_payload`);
+    console.error("[admin-users] failed to update user", error);
+
+    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
   }
 
   revalidatePath("/admin/dashboard/users");
-  redirect(`/admin/dashboard/users?lang=${lang}&updated=1`);
+  redirect(buildUsersRedirect(formData, { updated: "1" }));
 }
 
 export async function updateLegalRequestAction(formData: FormData) {
@@ -133,6 +169,7 @@ export async function markSupportHandledAction(formData: FormData) {
   const admin = await requireAdminUser();
   const id = String(formData.get("inquiryId") ?? "");
   const adminNote = String(formData.get("adminNote") ?? "").trim();
+
   if (!id) return;
 
   await prisma.contactInquiry.update({
@@ -178,10 +215,16 @@ export async function broadcastNotificationAction(formData: FormData) {
   const audience = String(formData.get("audience") ?? "ALL_USERS");
   const title = String(formData.get("title") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
+
   if (!title || !message) return;
 
-  const where = audience === "CLIENTS" ? { role: RoleType.CLIENT, isActive: true } : { isActive: true };
+  const where =
+    audience === "CLIENTS"
+      ? { role: RoleType.CLIENT, isActive: true }
+      : { isActive: true };
+
   const users = await prisma.user.findMany({ where, select: { id: true } });
+
   if (!users.length) return;
 
   await prisma.notification.createMany({
@@ -206,25 +249,40 @@ export async function broadcastNotificationAction(formData: FormData) {
 
 export async function markNotificationReadAction(formData: FormData) {
   await requireAdminUser();
+
   const id = String(formData.get("notificationId") ?? "");
   if (!id) return;
-  await prisma.notification.update({ where: { id }, data: { readAt: new Date() } });
+
+  await prisma.notification.update({
+    where: { id },
+    data: { readAt: new Date() }
+  });
+
   revalidatePath("/admin/dashboard/notifications");
 }
 
 export async function markNotificationUnreadAction(formData: FormData) {
   await requireAdminUser();
+
   const id = String(formData.get("notificationId") ?? "");
   if (!id) return;
-  await prisma.notification.update({ where: { id }, data: { readAt: null } });
+
+  await prisma.notification.update({
+    where: { id },
+    data: { readAt: null }
+  });
+
   revalidatePath("/admin/dashboard/notifications");
 }
 
 export async function deleteNotificationAction(formData: FormData) {
   await requireAdminUser();
+
   const id = String(formData.get("notificationId") ?? "");
   if (!id) return;
+
   await prisma.notification.delete({ where: { id } });
+
   revalidatePath("/admin/dashboard/notifications");
 }
 
@@ -234,12 +292,18 @@ export async function upsertCategoryAction(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
   const nameEn = String(formData.get("nameEn") ?? "").trim();
   const nameAr = String(formData.get("nameAr") ?? "").trim();
+
   if (!slug || !nameEn || !nameAr) return;
 
   if (id) {
-    await prisma.serviceCategory.update({ where: { id }, data: { slug, nameEn, nameAr } });
+    await prisma.serviceCategory.update({
+      where: { id },
+      data: { slug, nameEn, nameAr }
+    });
   } else {
-    await prisma.serviceCategory.create({ data: { slug, nameEn, nameAr } });
+    await prisma.serviceCategory.create({
+      data: { slug, nameEn, nameAr }
+    });
   }
 
   await createActivityLog({
@@ -255,10 +319,12 @@ export async function upsertCategoryAction(formData: FormData) {
 export async function deleteCategoryAction(formData: FormData) {
   const admin = await requireAdminUser();
   const id = String(formData.get("id") ?? "").trim();
+
   if (!id) return;
 
   const usage = await prisma.legalRequest.count({ where: { categoryId: id } });
   const usage2 = await prisma.serviceRequest.count({ where: { categoryId: id } });
+
   if (usage + usage2 > 0) return;
 
   await prisma.serviceCategory.delete({ where: { id } });
@@ -285,8 +351,19 @@ export async function upsertSiteContentAction(formData: FormData) {
 
   await prisma.siteContent.upsert({
     where: { key },
-    update: { titleEn, titleAr, bodyEn: bodyEn || null, bodyAr: bodyAr || null },
-    create: { key, titleEn, titleAr, bodyEn: bodyEn || null, bodyAr: bodyAr || null }
+    update: {
+      titleEn,
+      titleAr,
+      bodyEn: bodyEn || null,
+      bodyAr: bodyAr || null
+    },
+    create: {
+      key,
+      titleEn,
+      titleAr,
+      bodyEn: bodyEn || null,
+      bodyAr: bodyAr || null
+    }
   });
 
   await createActivityLog({
@@ -306,15 +383,27 @@ export async function updateFaqAction(formData: FormData) {
   const answerEn = String(formData.get("answerEn") ?? "").trim();
   const questionAr = String(formData.get("questionAr") ?? "").trim();
   const answerAr = String(formData.get("answerAr") ?? "").trim();
+
   if (!questionEn || !answerEn || !questionAr || !answerAr) return;
 
   if (id) {
-    await prisma.fAQ.update({ where: { id }, data: { questionEn, answerEn, questionAr, answerAr } });
+    await prisma.fAQ.update({
+      where: { id },
+      data: { questionEn, answerEn, questionAr, answerAr }
+    });
   } else {
-    await prisma.fAQ.create({ data: { questionEn, answerEn, questionAr, answerAr } });
+    await prisma.fAQ.create({
+      data: { questionEn, answerEn, questionAr, answerAr }
+    });
   }
 
-  await createActivityLog({ actorId: admin.id, action: "ADMIN_FAQ_UPDATED", entityType: "FAQ", entityId: id || null });
+  await createActivityLog({
+    actorId: admin.id,
+    action: "ADMIN_FAQ_UPDATED",
+    entityType: "FAQ",
+    entityId: id || null
+  });
+
   revalidatePath("/admin/dashboard/content");
 }
 
@@ -327,11 +416,24 @@ export async function updateAdminProfileAction(formData: FormData) {
 
   if (!name) return;
 
-  await prisma.user.update({ where: { id: admin.id }, data: { name } });
+  await prisma.user.update({
+    where: { id: admin.id },
+    data: { name }
+  });
+
   await prisma.profile.upsert({
     where: { userId: admin.id },
-    update: { phone: phone || null, country: country || null, language },
-    create: { userId: admin.id, phone: phone || null, country: country || null, language }
+    update: {
+      phone: phone || null,
+      country: country || null,
+      language
+    },
+    create: {
+      userId: admin.id,
+      phone: phone || null,
+      country: country || null,
+      language
+    }
   });
 
   revalidatePath("/admin/dashboard/settings");
@@ -340,11 +442,22 @@ export async function updateAdminProfileAction(formData: FormData) {
 export async function changeAdminPasswordAction(formData: FormData) {
   const admin = await requireAdminUser();
   const newPassword = String(formData.get("newPassword") ?? "");
+
   if (newPassword.length < 8) return;
 
   const passwordHash = await hashPassword(newPassword);
-  await prisma.user.update({ where: { id: admin.id }, data: { passwordHash } });
-  await createActivityLog({ actorId: admin.id, action: "ADMIN_PASSWORD_CHANGED", entityType: "User", entityId: admin.id });
+
+  await prisma.user.update({
+    where: { id: admin.id },
+    data: { passwordHash }
+  });
+
+  await createActivityLog({
+    actorId: admin.id,
+    action: "ADMIN_PASSWORD_CHANGED",
+    entityType: "User",
+    entityId: admin.id
+  });
 
   revalidatePath("/admin/dashboard/security");
   redirect("/admin/dashboard/security?updated=1");
