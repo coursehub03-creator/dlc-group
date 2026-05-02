@@ -35,8 +35,8 @@ function buildUsersRedirect(formData: FormData, overrides?: { error?: string }) 
 
 const updateUserSchema = z.object({
   userId: z.string().min(1),
-  name: z.string().min(2),
-  role: z.nativeEnum(RoleType)
+  name: z.string().trim().optional(),
+  role: z.enum(["GUEST", "CLIENT", "LEGAL_STAFF", "ADMIN"])
 });
 
 export async function adminSignOutAction() {
@@ -45,26 +45,21 @@ export async function adminSignOutAction() {
 
 export async function updateUserAction(formData: FormData) {
   const admin = await requireAdminUser();
-  const role = normalizeRole(formData.get("role"));
+  const userId = String(formData.get("userId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const role = String(formData.get("role") ?? "");
 
-  if (!role) {
-    redirect(buildUsersRedirect(formData, { error: "invalid_role" }));
-  }
-
-  const parsed = updateUserSchema.safeParse({
-    userId: formData.get("userId"),
-    name: formData.get("name"),
-    role
-  });
+  const parsed = updateUserSchema.safeParse({ userId, name, role });
 
   if (!parsed.success) {
+    console.error("[admin-users] invalid payload", { userId, name, role });
     redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
   }
 
   try {
     await prisma.user.update({
       where: { id: parsed.data.userId },
-      data: { name: parsed.data.name, role: parsed.data.role }
+      data: { name: parsed.data.name || null, role: parsed.data.role }
     });
 
     await createActivityLog({
