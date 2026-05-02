@@ -8,9 +8,9 @@ type UsersSearchParams = Promise<{ q?: string; role?: string; page?: string; lan
 
 type UserRow = {
   id: string;
-  email: string;
+  email: string | null;
   name: string | null;
-  role: RoleType;
+  role: RoleType | null;
   createdAt: Date;
   profile: {
     phone: string | null;
@@ -24,8 +24,22 @@ const USERS_TAKE_LIMIT = 60;
 function resolveRoleFilter(value?: string): RoleType | undefined {
   if (!value) return undefined;
 
-  const normalized = value.trim().toUpperCase();
-  return Object.values(RoleType).includes(normalized as RoleType) ? (normalized as RoleType) : undefined;
+  const roleParam = value.trim().toUpperCase();
+  return roleParam === "ADMIN" || roleParam === "CLIENT" || roleParam === "LEGAL_STAFF" || roleParam === "GUEST"
+    ? (roleParam as RoleType)
+    : undefined;
+}
+
+const roleLabels = {
+  GUEST: { en: "Guest", ar: "زائر" },
+  CLIENT: { en: "Client", ar: "عميل" },
+  LEGAL_STAFF: { en: "Legal Staff", ar: "فريق قانوني" },
+  ADMIN: { en: "Admin", ar: "مدير" }
+} as const;
+
+function getRoleLabel(role: RoleType | null | undefined, locale: "en" | "ar") {
+  if (!role) return roleLabels.CLIENT[locale];
+  return roleLabels[role]?.[locale] ?? role ?? roleLabels.CLIENT[locale];
 }
 
 function formatCreatedAt(value: Date | null | undefined, lang: "en" | "ar") {
@@ -56,8 +70,9 @@ async function getUsers(q: string, role: RoleType | undefined, page: number): Pr
   };
 
   const usersWithoutProfile = await withSafeAdminQuery(
-    () =>
-      prisma.user.findMany({
+    async () => {
+      try {
+        return await prisma.user.findMany({
         where,
         select: {
           id: true,
@@ -69,7 +84,12 @@ async function getUsers(q: string, role: RoleType | undefined, page: number): Pr
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * USERS_TAKE_LIMIT,
         take: USERS_TAKE_LIMIT
-      }),
+      });
+      } catch (error) {
+        console.error("[admin-users] failed to load users", error);
+        throw error;
+      }
+    },
     [] as Array<{
       id: string;
       email: string;
@@ -188,10 +208,10 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
               {users.map((user) => (
                 <tr key={user.id}>
                   <td className="px-3 py-3">{user.name?.trim() || fallbackName}</td>
-                  <td className="px-3 py-3 text-slate-600">{user.email}</td>
+                  <td className="px-3 py-3 text-slate-600">{user.email?.trim() || "-"}</td>
                   <td className="px-3 py-3">{user.profile?.phone?.trim() || "-"}</td>
                   <td className="px-3 py-3">{user.profile?.country?.trim() || "-"}</td>
-                  <td className="px-3 py-3">{user.role || "CLIENT"}</td>
+                  <td className="px-3 py-3">{getRoleLabel(user.role, lang)}</td>
                   <td className="px-3 py-3">{formatCreatedAt(user.createdAt, lang)}</td>
                   <td className="px-3 py-3">
                     <form action={updateUserAction} className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
@@ -203,7 +223,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                       <select name="role" defaultValue={user.role || "CLIENT"} className="rounded border px-3 py-2 text-sm">
                         {Object.values(RoleType).map((value) => (
                           <option key={value} value={value}>
-                            {value}
+                            {getRoleLabel(value, lang)}
                           </option>
                         ))}
                       </select>

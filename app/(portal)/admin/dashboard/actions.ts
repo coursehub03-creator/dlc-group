@@ -36,8 +36,7 @@ function buildUsersRedirect(formData: FormData, overrides?: { error?: string }) 
 const updateUserSchema = z.object({
   userId: z.string().min(1),
   name: z.string().min(2),
-  role: z.nativeEnum(RoleType),
-  isActive: z.coerce.boolean()
+  role: z.nativeEnum(RoleType)
 });
 
 export async function adminSignOutAction() {
@@ -55,26 +54,30 @@ export async function updateUserAction(formData: FormData) {
   const parsed = updateUserSchema.safeParse({
     userId: formData.get("userId"),
     name: formData.get("name"),
-    role,
-    isActive: formData.get("isActive") === "on"
+    role
   });
 
   if (!parsed.success) {
     redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
   }
 
-  await prisma.user.update({
-    where: { id: parsed.data.userId },
-    data: { name: parsed.data.name, role: parsed.data.role, isActive: parsed.data.isActive }
-  });
+  try {
+    await prisma.user.update({
+      where: { id: parsed.data.userId },
+      data: { name: parsed.data.name, role: parsed.data.role }
+    });
 
-  await createActivityLog({
-    actorId: admin.id,
-    action: "ADMIN_USER_UPDATED",
-    entityType: "User",
-    entityId: parsed.data.userId,
-    meta: { role: parsed.data.role, isActive: parsed.data.isActive }
-  });
+    await createActivityLog({
+      actorId: admin.id,
+      action: "ADMIN_USER_UPDATED",
+      entityType: "User",
+      entityId: parsed.data.userId,
+      meta: { role: parsed.data.role }
+    });
+  } catch (error) {
+    console.error("[admin-users] failed to update role", error);
+    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
+  }
 
   revalidatePath("/admin/dashboard/users");
   redirect(buildUsersRedirect(formData));
