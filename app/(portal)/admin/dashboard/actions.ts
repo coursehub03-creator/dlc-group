@@ -10,6 +10,29 @@ import { createActivityLog } from "@/lib/admin/activity";
 import { requireAdminUser } from "@/lib/admin/guard";
 import { prisma } from "@/lib/db/prisma";
 
+const allowedRoles = new Set<RoleType>([RoleType.GUEST, RoleType.CLIENT, RoleType.LEGAL_STAFF, RoleType.ADMIN]);
+
+function normalizeRole(value: FormDataEntryValue | null): RoleType | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toUpperCase();
+  return allowedRoles.has(normalized as RoleType) ? (normalized as RoleType) : undefined;
+}
+
+function buildUsersRedirect(formData: FormData, overrides?: { error?: string }) {
+  const params = new URLSearchParams();
+  const q = String(formData.get("q") ?? "").trim();
+  const lang = String(formData.get("lang") ?? "en").trim().toLowerCase();
+  const role = normalizeRole(formData.get("currentRole"));
+
+  if (q) params.set("q", q);
+  params.set("lang", lang === "ar" ? "ar" : "en");
+  if (role) params.set("role", role);
+  if (overrides?.error) params.set("error", overrides.error);
+
+  const query = params.toString();
+  return `/admin/dashboard/users${query ? `?${query}` : ""}`;
+}
+
 const updateUserSchema = z.object({
   userId: z.string().min(1),
   name: z.string().min(2),
@@ -23,14 +46,22 @@ export async function adminSignOutAction() {
 
 export async function updateUserAction(formData: FormData) {
   const admin = await requireAdminUser();
+  const role = normalizeRole(formData.get("role"));
+
+  if (!role) {
+    redirect(buildUsersRedirect(formData, { error: "invalid_role" }));
+  }
+
   const parsed = updateUserSchema.safeParse({
     userId: formData.get("userId"),
     name: formData.get("name"),
-    role: formData.get("role"),
+    role,
     isActive: formData.get("isActive") === "on"
   });
 
-  if (!parsed.success) return;
+  if (!parsed.success) {
+    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
+  }
 
   await prisma.user.update({
     where: { id: parsed.data.userId },
@@ -46,6 +77,7 @@ export async function updateUserAction(formData: FormData) {
   });
 
   revalidatePath("/admin/dashboard/users");
+  redirect(buildUsersRedirect(formData));
 }
 
 export async function updateLegalRequestAction(formData: FormData) {
