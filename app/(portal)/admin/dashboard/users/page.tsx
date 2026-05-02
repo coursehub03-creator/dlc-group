@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { adminText, getAdminLang, localeFor } from "@/lib/admin/i18n";
 import { withSafeAdminQuery } from "@/lib/admin/guard";
 
-type UsersSearchParams = Promise<{ q?: string; role?: string; page?: string; lang?: string }>;
+type UsersSearchParams = Promise<{ q?: string; role?: string; page?: string; lang?: string; error?: string }>;
 
 type UserRow = {
   id: string;
@@ -114,6 +114,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
   const q = params.q?.trim() ?? "";
   const role = resolveRoleFilter(params.role);
   const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
+  const error = typeof params.error === "string" ? params.error : "";
 
   const users = await getUsers(q, role, page);
 
@@ -151,6 +152,18 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
         <button className="rounded bg-navy px-3 py-2 text-sm font-semibold text-white">{t.common.filter}</button>
       </form>
 
+      {error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error === "invalid_role"
+            ? lang === "ar"
+              ? "قيمة الدور غير صالحة. يرجى اختيار دور صحيح."
+              : "Invalid role value submitted. Please choose a valid role."
+            : lang === "ar"
+              ? "تعذر تحديث المستخدم. تحقق من البيانات ثم أعد المحاولة."
+              : "We could not update this user. Please review the data and try again."}
+        </div>
+      ) : null}
+
       <div className="text-sm text-slate-600">{lang === "ar" ? `عرض ${users.length} مستخدم` : `Showing ${users.length} users`}</div>
 
       {users.length === 0 ? (
@@ -183,6 +196,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                   <td className="px-3 py-3">
                     <form action={updateUserAction} className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
                       <input type="hidden" name="userId" value={user.id} />
+                      <input type="hidden" name="q" value={q} />
+                      <input type="hidden" name="lang" value={lang} />
+                      <input type="hidden" name="currentRole" value={role ?? ""} />
                       <input name="name" defaultValue={user.name?.trim() || fallbackName} className="rounded border px-3 py-2 text-sm" required />
                       <select name="role" defaultValue={user.role || "CLIENT"} className="rounded border px-3 py-2 text-sm">
                         {Object.values(RoleType).map((value) => (
