@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { RoleType, RequestStatus } from "@prisma/client";
-import { z } from "zod";
 import { hashPassword } from "@/lib/auth/password";
 import { signOut } from "@/lib/auth/auth";
 import { createActivityLog } from "@/lib/admin/activity";
@@ -33,11 +32,6 @@ function buildUsersRedirect(formData: FormData, overrides?: { error?: string }) 
   return `/admin/dashboard/users${query ? `?${query}` : ""}`;
 }
 
-const updateUserSchema = z.object({
-  userId: z.string().min(1),
-  name: z.string().trim().optional(),
-  role: z.enum(["GUEST", "CLIENT", "LEGAL_STAFF", "ADMIN"])
-});
 
 export async function adminSignOutAction() {
   await signOut({ redirectTo: "/auth/sign-in" });
@@ -45,37 +39,68 @@ export async function adminSignOutAction() {
 
 export async function updateUserAction(formData: FormData) {
   const admin = await requireAdminUser();
-  const userId = String(formData.get("userId") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const role = String(formData.get("role") ?? "");
+  console.error("[admin-users:update] raw form data", {
+    entries: Object.fromEntries(formData.entries())
+  });
 
-  const parsed = updateUserSchema.safeParse({ userId, name, role });
+  const rawUserId = formData.get("userId");
+  const rawName = formData.get("name");
+  const rawRole = formData.get("role");
+  const rawLang = formData.get("lang");
 
-  if (!parsed.success) {
-    console.error("[admin-users] invalid payload", { userId, name, role });
-    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
+  const userId = typeof rawUserId === "string" ? rawUserId : "";
+  const name = typeof rawName === "string" ? rawName.trim() : "";
+  const role = typeof rawRole === "string" ? rawRole : "";
+  const lang = rawLang === "ar" ? "ar" : "en";
+
+  console.error("[admin-users:update] parsed payload", {
+    userId,
+    name,
+    role,
+    lang
+  });
+
+  const allowedRoleValues: RoleType[] = [RoleType.GUEST, RoleType.CLIENT, RoleType.LEGAL_STAFF, RoleType.ADMIN];
+
+  if (!userId || !allowedRoleValues.includes(role as RoleType)) {
+    console.error("[admin-users:update] validation failed", {
+      userId,
+      name,
+      role,
+      reason: !userId ? "missing userId" : "invalid role"
+    });
+    redirect(`/admin/dashboard/users?lang=${lang}&error=invalid_user_payload`);
   }
 
   try {
     await prisma.user.update({
-      where: { id: parsed.data.userId },
-      data: { name: parsed.data.name || null, role: parsed.data.role }
+      where: { id: userId },
+      data: {
+        name: name || null,
+        role: role as RoleType
+      }
     });
 
     await createActivityLog({
       actorId: admin.id,
       action: "ADMIN_USER_UPDATED",
       entityType: "User",
-      entityId: parsed.data.userId,
-      meta: { role: parsed.data.role }
+      entityId: userId,
+      meta: { role }
     });
   } catch (error) {
+    console.error("[admin-users:update] validation failed", {
+      userId,
+      name,
+      role,
+      reason: "update query failed"
+    });
     console.error("[admin-users] failed to update role", error);
-    redirect(buildUsersRedirect(formData, { error: "invalid_user_payload" }));
+    redirect(`/admin/dashboard/users?lang=${lang}&error=invalid_user_payload`);
   }
 
   revalidatePath("/admin/dashboard/users");
-  redirect(buildUsersRedirect(formData));
+  redirect(`/admin/dashboard/users?lang=${lang}&updated=1`);
 }
 
 export async function updateLegalRequestAction(formData: FormData) {

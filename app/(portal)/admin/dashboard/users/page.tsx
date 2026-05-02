@@ -216,17 +216,14 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                   <td className="px-3 py-3">
                     <form action={updateUserAction} className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
                       <input type="hidden" name="userId" value={user.id} />
-                      <input type="hidden" name="q" value={q} />
-                      <input type="hidden" name="lang" value={lang} />
-                      <input type="hidden" name="currentRole" value={role ?? ""} />
-                      <input name="name" defaultValue={user.name?.trim() || ""} placeholder={fallbackName} className="rounded border px-3 py-2 text-sm" />
-                      <select name="role" defaultValue={user.role || "CLIENT"} className="rounded border px-3 py-2 text-sm">
-                        {Object.values(RoleType).map((value) => (
-                          <option key={value} value={value}>
-                            {getRoleLabel(value, lang)}
-                          </option>
-                        ))}
+                      <input name="name" defaultValue={user.name ?? ""} placeholder={fallbackName} className="rounded border px-3 py-2 text-sm" />
+                      <select name="role" defaultValue={user.role ?? "CLIENT"} className="rounded border px-3 py-2 text-sm">
+                        <option value="GUEST">{getRoleLabel("GUEST", lang)}</option>
+                        <option value="CLIENT">{getRoleLabel("CLIENT", lang)}</option>
+                        <option value="LEGAL_STAFF">{getRoleLabel("LEGAL_STAFF", lang)}</option>
+                        <option value="ADMIN">{getRoleLabel("ADMIN", lang)}</option>
                       </select>
+                      <input type="hidden" name="lang" value={lang} />
                       <button className="rounded bg-gold px-3 py-2 text-sm font-semibold text-navy md:col-span-3">{t.common.save}</button>
                     </form>
                   </td>
