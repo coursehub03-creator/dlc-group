@@ -219,7 +219,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: U
                       <input type="hidden" name="q" value={q} />
                       <input type="hidden" name="lang" value={lang} />
                       <input type="hidden" name="currentRole" value={role ?? ""} />
-                      <input name="name" defaultValue={user.name?.trim() || fallbackName} className="rounded border px-3 py-2 text-sm" required />
+                      <input name="name" defaultValue={user.name?.trim() || ""} placeholder={fallbackName} className="rounded border px-3 py-2 text-sm" />
                       <select name="role" defaultValue={user.role || "CLIENT"} className="rounded border px-3 py-2 text-sm">
                         {Object.values(RoleType).map((value) => (
                           <option key={value} value={value}>
