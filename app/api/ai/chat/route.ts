@@ -22,8 +22,8 @@ async function getOrCreateGuestUserId() {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json({ error: "AI service key is missing. Set OPENAI_API_KEY or OPENROUTER_API_KEY." }, { status: 503 });
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: "AI service key is missing. Set OPENAI_API_KEY." }, { status: 503 });
     }
 
     const body = ((await req.json().catch(() => ({}))) ?? {}) as {
@@ -74,7 +74,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const stream = await streamLegalResponse({ message, category, locale, jurisdiction: jurisdiction ?? undefined, fileText: body.fileText });
+    let stream;
+    try {
+      stream = await streamLegalResponse({ message, category, locale, jurisdiction: jurisdiction ?? undefined, fileText: body.fileText });
+    } catch (error: unknown) {
+      console.error("[ai-chat] failed", error);
+      const status = typeof error === "object" && error !== null && "status" in error ? Number((error as { status?: number }).status) : undefined;
+      if (status === 429) {
+        return NextResponse.json({ error: "AI service is temporarily unavailable. Please try again later." }, { status: 503 });
+      }
+
+      throw error;
+    }
     const encoder = new TextEncoder();
     let fullAssistantReply = "";
 
@@ -95,8 +106,17 @@ export async function POST(req: NextRequest) {
           }
 
           controller.close();
-        } catch (error) {
+        } catch (error: unknown) {
           console.error("[ai-chat] failed", error);
+          const status = typeof error === "object" && error !== null && "status" in error ? Number((error as { status?: number }).status) : undefined;
+          if (status === 429) {
+            const friendlyMessage = "AI service is temporarily unavailable. Please try again later.";
+            fullAssistantReply += friendlyMessage;
+            controller.enqueue(encoder.encode(friendlyMessage));
+            controller.close();
+            return;
+          }
+
           controller.error(error);
         }
       },
@@ -109,8 +129,14 @@ export async function POST(req: NextRequest) {
         "X-Conversation-Id": conversation.id,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("[ai-chat] failed", error);
+    const status = typeof error === "object" && error !== null && "status" in error ? Number((error as { status?: number }).status) : undefined;
+
+    if (status === 429) {
+      return NextResponse.json({ error: "AI service is temporarily unavailable. Please try again later." }, { status: 503 });
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to process AI request right now. Please try again." },
       { status: 500 },
