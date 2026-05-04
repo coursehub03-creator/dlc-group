@@ -1,19 +1,16 @@
 import OpenAI from "openai";
 import { buildLegalSystemPrompt } from "@/lib/ai/legal-prompts";
 
-const isOpenRouter = Boolean(process.env.OPENROUTER_API_KEY) && !process.env.OPENAI_API_KEY;
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY,
-  ...(isOpenRouter
-    ? {
-        baseURL: "https://openrouter.ai/api/v1",
-        defaultHeaders: {
-          "HTTP-Referer": "https://dlcgroup.online",
-          "X-Title": "DLC Group",
-        },
-      }
-    : {}),
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: OPENROUTER_BASE_URL,
+  defaultHeaders: {
+    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    "HTTP-Referer": "https://dlcgroup.online",
+    "X-Title": "DLC Legal AI",
+  },
 });
 
 export const LEGAL_MODES = [
@@ -44,15 +41,15 @@ export async function streamLegalResponse({
   jurisdiction,
   fileText,
 }: StreamLegalResponseInput) {
-  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing AI API key. Set OPENAI_API_KEY or OPENROUTER_API_KEY.");
+    throw new Error("Missing AI API key. Set OPENAI_API_KEY.");
   }
 
   const safeMode = LEGAL_MODES.includes(category as LegalMode) ? (category as LegalMode) : "general_legal_consultation";
 
   const completion = await openai.chat.completions.create({
-    model: process.env.AI_MODEL || (isOpenRouter ? "openai/gpt-4o-mini" : "gpt-4o-mini"),
+    model: process.env.AI_MODEL || "openai/gpt-4o-mini",
     messages: [
       { role: "system", content: buildLegalSystemPrompt({ locale, mode: safeMode, jurisdiction }) },
       {
