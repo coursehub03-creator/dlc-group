@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
   defaultHeaders: {
     "HTTP-Referer": "https://dlcgroup.online",
@@ -109,6 +109,11 @@ export async function streamLegalResponse({
   jurisdiction,
   fileText,
 }: StreamLegalResponseInput) {
+  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing AI API key. Set OPENAI_API_KEY or OPENROUTER_API_KEY.");
+  }
+
   const completion = await openai.chat.completions.create({
     model: "openai/gpt-4o-mini",
     messages: [
