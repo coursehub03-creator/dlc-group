@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { streamLegalResponse } from "@/lib/ai/chat";
+import { LEGAL_MODES, streamLegalResponse } from "@/lib/ai/chat";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -22,10 +22,7 @@ async function getOrCreateGuestUserId() {
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "OPENAI_API_KEY is missing." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "OPENAI_API_KEY is missing." }, { status: 500 });
     }
 
     const body = (await req.json()) as {
@@ -33,37 +30,36 @@ export async function POST(req: NextRequest) {
       category?: string;
       locale?: "ar" | "en";
       conversationId?: string;
+      jurisdiction?: string;
+      fileText?: string;
     };
 
     const message = body.message?.trim();
-    if (!message) {
-      return NextResponse.json(
-        { error: "Message is required." },
-        { status: 400 }
-      );
-    }
+    if (!message) return NextResponse.json({ error: "Message is required." }, { status: 400 });
 
     const locale = body.locale === "ar" ? "ar" : "en";
-    const category = body.category ?? "corporate";
+    const category = LEGAL_MODES.includes(body.category as never)
+      ? (body.category as string)
+      : "general_legal_consultation";
+
+    const jurisdiction = body.jurisdiction?.trim() || null;
     const userId = await getOrCreateGuestUserId();
 
     const conversation = body.conversationId
-      ? await prisma.aIConversation.findUnique({
-          where: { id: body.conversationId },
-        })
+      ? await prisma.aIConversation.findUnique({ where: { id: body.conversationId } })
       : await prisma.aIConversation.create({
           data: {
             userId,
             title: message.slice(0, 80),
             category,
+            jurisdiction,
           },
         });
 
-    if (!conversation) {
-      return NextResponse.json(
-        { error: "Conversation not found." },
-        { status: 404 }
-      );
+    if (!conversation) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+
+    if (jurisdiction && conversation.jurisdiction !== jurisdiction) {
+      await prisma.aIConversation.update({ where: { id: conversation.id }, data: { jurisdiction } });
     }
 
     await prisma.aIMessage.create({
@@ -74,7 +70,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const stream = await streamLegalResponse({ message, category, locale });
+    const stream = await streamLegalResponse({ message, category, locale, jurisdiction: jurisdiction ?? undefined, fileText: body.fileText });
     const encoder = new TextEncoder();
     let fullAssistantReply = "";
 
@@ -84,18 +80,13 @@ export async function POST(req: NextRequest) {
           for await (const chunk of stream) {
             const text = chunk.choices?.[0]?.delta?.content ?? "";
             if (!text) continue;
-
             fullAssistantReply += text;
             controller.enqueue(encoder.encode(text));
           }
 
           if (fullAssistantReply.trim()) {
             await prisma.aIMessage.create({
-              data: {
-                conversationId: conversation.id,
-                role: "assistant",
-                content: fullAssistantReply,
-              },
+              data: { conversationId: conversation.id, role: "assistant", content: fullAssistantReply },
             });
           }
 
@@ -116,13 +107,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("POST /api/ai/chat error:", error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unknown server error",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown server error" }, { status: 500 });
   }
 }
