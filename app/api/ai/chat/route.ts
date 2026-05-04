@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "AI service key is missing. Set OPENAI_API_KEY or OPENROUTER_API_KEY." }, { status: 503 });
     }
 
-    const body = (await req.json()) as {
+    const body = ((await req.json().catch(() => ({}))) ?? {}) as {
       message?: string;
       category?: string;
       locale?: "ar" | "en";
@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
     if (!conversation) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
 
     if (jurisdiction && conversation.jurisdiction !== jurisdiction) {
-      await prisma.aIConversation.update({ where: { id: conversation.id }, data: { jurisdiction } });
+      await prisma.aIConversation.update({ where: { id: conversation.id }, data: { jurisdiction, category } });
+    } else if (conversation.category !== category) {
+      await prisma.aIConversation.update({ where: { id: conversation.id }, data: { category } });
     }
 
     await prisma.aIMessage.create({

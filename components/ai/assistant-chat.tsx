@@ -24,6 +24,29 @@ const MODES = [
   "legal_strategy",
 ] as const;
 
+const MODE_LABELS = {
+  en: {
+    general_legal_consultation: "General Legal Consultation",
+    contract_analysis: "Contract Analysis",
+    contract_drafting: "Contract Drafting",
+    land_real_estate_dispute: "Land / Real Estate Disputes",
+    trademark_patent_support: "Trademark / Patent Support",
+    company_monitoring: "Company Monitoring",
+    case_evaluation: "Case Evaluation",
+    legal_strategy: "Legal Strategy",
+  },
+  ar: {
+    general_legal_consultation: "استشارة قانونية عامة",
+    contract_analysis: "تحليل العقود",
+    contract_drafting: "صياغة العقود",
+    land_real_estate_dispute: "منازعات الأراضي / العقار",
+    trademark_patent_support: "دعم العلامات / البراءات",
+    company_monitoring: "مراقبة الشركات",
+    case_evaluation: "تقييم القضايا",
+    legal_strategy: "الاستراتيجية القانونية",
+  },
+} as const;
+
 const chatCopy = {
   en: {
     send: "Send",
@@ -42,11 +65,11 @@ const chatCopy = {
     quick: "Quick prompts",
     placeholder: "Describe your legal matter with facts, dates, and documents...",
     suggestions: [
-      "Analyze this contract",
-      "Draft a non-disclosure agreement",
-      "Evaluate a land dispute",
-      "What documents do I need for trademark registration?",
-      "Build a legal strategy for my case",
+      "Analyze this contract and highlight risks.",
+      "Draft an NDA under UAE law.",
+      "Evaluate my case based on available evidence.",
+      "Help with a land dispute over title and possession.",
+      "Plan a legal strategy with deadlines and risks.",
     ],
   },
   ar: {
@@ -66,11 +89,11 @@ const chatCopy = {
     quick: "اقتراحات سريعة",
     placeholder: "اشرح المسألة القانونية مع الوقائع والتواريخ والمستندات...",
     suggestions: [
-      "Analyze this contract",
-      "Draft a non-disclosure agreement",
-      "Evaluate a land dispute",
-      "What documents do I need for trademark registration?",
-      "Build a legal strategy for my case",
+      "حلّل هذا العقد وحدد المخاطر.",
+      "صِغ اتفاقية عدم إفصاح وفق قانون دولة محددة.",
+      "قيّم قضيتي بناءً على الأدلة المتاحة.",
+      "ساعدني في نزاع عقاري حول الملكية والحيازة.",
+      "ابنِ استراتيجية قانونية تتضمن المواعيد والمخاطر.",
     ],
   },
 } as const;
@@ -163,7 +186,7 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
           {t.mode}
           <select className="mt-1 w-full rounded border p-2" value={mode} onChange={(e) => setMode(e.target.value as (typeof MODES)[number])}>
             {MODES.map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>{MODE_LABELS[locale][m]}</option>
             ))}
           </select>
         </label>
