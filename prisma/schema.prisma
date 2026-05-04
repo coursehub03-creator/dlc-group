@@ -69,22 +69,22 @@ enum TrademarkStatus {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  passwordHash    String
-  name            String?
-  role            RoleType         @default(CLIENT)
-  isActive        Boolean          @default(true)
-  profile         Profile?
-  accounts        Account[]
-  sessions        Session[]
-  serviceRequests ServiceRequest[]
-  legalRequests   LegalRequest[]
-  aiConversations AIConversation[]
-  notifications   Notification[]
-  sentNotifications Notification[] @relation("NotificationSender")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                String           @id @default(cuid())
+  email             String           @unique
+  passwordHash      String
+  name              String?
+  role              RoleType         @default(CLIENT)
+  isActive          Boolean          @default(true)
+  profile           Profile?
+  accounts          Account[]
+  sessions          Session[]
+  serviceRequests   ServiceRequest[]
+  legalRequests     LegalRequest[]
+  aiConversations   AIConversation[]
+  notifications     Notification[]
+  sentNotifications Notification[]   @relation("NotificationSender")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 model Profile {
@@ -298,7 +298,6 @@ model Testimonial {
   updatedAt DateTime @updatedAt
 }
 
-
 model SiteContent {
   id        String   @id @default(cuid())
   key       String   @unique
@@ -309,15 +308,17 @@ model SiteContent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
 model AIConversation {
-  id        String      @id @default(cuid())
-  userId    String
-  title     String
-  category  String
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  AIMessage[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  userId       String
+  title        String
+  category     String
+  jurisdiction String?
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     AIMessage[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model AIMessage {
@@ -330,17 +331,17 @@ model AIMessage {
 }
 
 model ContactInquiry {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   email       String
   phone       String?
   country     String?
   serviceType String?
   message     String
-  consent     Boolean  @default(false)
+  consent     Boolean   @default(false)
   reviewedAt  DateTime?
   adminNote   String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 }
 
 model ActivityLog {
