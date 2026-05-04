@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LEGAL_MODES, streamLegalResponse } from "@/lib/ai/chat";
 import { prisma } from "@/lib/db/prisma";
+import { auth } from "@/lib/auth/auth";
 
 export const runtime = "nodejs";
 
@@ -21,8 +22,8 @@ async function getOrCreateGuestUserId() {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "OPENAI_API_KEY is missing." }, { status: 500 });
+    if (!process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+      return NextResponse.json({ error: "AI service key is missing. Set OPENAI_API_KEY or OPENROUTER_API_KEY." }, { status: 503 });
     }
 
     const body = (await req.json()) as {
@@ -43,10 +44,11 @@ export async function POST(req: NextRequest) {
       : "general_legal_consultation";
 
     const jurisdiction = body.jurisdiction?.trim() || null;
-    const userId = await getOrCreateGuestUserId();
+    const session = await auth();
+    const userId = session?.user?.id || (await getOrCreateGuestUserId());
 
     const conversation = body.conversationId
-      ? await prisma.aIConversation.findUnique({ where: { id: body.conversationId } })
+      ? await prisma.aIConversation.findFirst({ where: { id: body.conversationId, userId } })
       : await prisma.aIConversation.create({
           data: {
             userId,
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
 
           controller.close();
         } catch (error) {
-          console.error("AI stream error:", error);
+          console.error("[ai-chat] failed", error);
           controller.error(error);
         }
       },
@@ -106,7 +108,10 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("POST /api/ai/chat error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown server error" }, { status: 500 });
+    console.error("[ai-chat] failed", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to process AI request right now. Please try again." },
+      { status: 500 },
+    );
   }
 }

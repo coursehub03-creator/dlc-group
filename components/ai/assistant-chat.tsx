@@ -32,7 +32,12 @@ const chatCopy = {
     prompt: "Which country or jurisdiction does this matter relate to?",
     jurisdiction: "Jurisdiction",
     mode: "Mode",
-    upload: "Upload contract PDF (scaffold: paste extracted text)",
+    upload: "Upload contract PDF",
+    uploadHint: "Or paste extracted contract text manually",
+    uploadButton: "Extract text from PDF",
+    uploading: "Extracting...",
+    noConversations: "No saved consultations yet",
+    chatError: "Sorry, we couldn't get an AI response right now. Please try again.",
     history: "Saved consultations",
     quick: "Quick prompts",
     placeholder: "Describe your legal matter with facts, dates, and documents...",
@@ -51,7 +56,12 @@ const chatCopy = {
     prompt: "Which country or jurisdiction does this matter relate to?",
     jurisdiction: "الدولة/الاختصاص",
     mode: "النمط",
-    upload: "رفع عقد PDF (نموذج أولي: الصق النص المستخرج)",
+    upload: "رفع عقد PDF",
+    uploadHint: "أو الصق نص العقد يدوياً",
+    uploadButton: "استخراج النص من PDF",
+    uploading: "جارٍ الاستخراج...",
+    noConversations: "لا توجد استشارات محفوظة بعد",
+    chatError: "تعذّر الحصول على رد من المساعد حالياً. حاول مرة أخرى.",
     history: "الاستشارات المحفوظة",
     quick: "اقتراحات سريعة",
     placeholder: "اشرح المسألة القانونية مع الوقائع والتواريخ والمستندات...",
@@ -75,6 +85,9 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
   const [jurisdiction, setJurisdiction] = useState("");
   const [fileText, setFileText] = useState("");
   const [history, setHistory] = useState<Conversation[]>([]);
+  const [error, setError] = useState("");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
 
   useEffect(() => {
     fetch("/api/ai/conversations")
@@ -83,15 +96,48 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
       .catch(() => setHistory([]));
   }, [response]);
 
+  const uploadPdf = async () => {
+    if (!pdfFile) return;
+    if (pdfFile.type !== "application/pdf" && !pdfFile.name.toLowerCase().endsWith(".pdf")) {
+      setError(locale === "ar" ? "يرجى رفع ملف PDF فقط." : "Please upload a PDF file only.");
+      return;
+    }
+    if (pdfFile.size > 10 * 1024 * 1024) {
+      setError(locale === "ar" ? "حجم ملف PDF يجب ألا يتجاوز 10MB." : "PDF size must be 10MB or less.");
+      return;
+    }
+
+    setUploadingPdf(true);
+    setError("");
+    const formData = new FormData();
+    formData.append("file", pdfFile);
+    const res = await fetch("/api/ai/pdf-extract", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || t.chatError);
+    } else {
+      setFileText(data.text || "");
+    }
+    setUploadingPdf(false);
+  };
+
   const send = async () => {
     if (!message.trim()) return;
     setLoading(true);
     setResponse("");
+    setError("");
     const res = await fetch("/api/ai/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, category: mode, locale, jurisdiction, conversationId, fileText }),
     });
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      setError(payload.error || t.chatError);
+      setLoading(false);
+      return;
+    }
 
     const nextConversationId = res.headers.get("X-Conversation-Id");
     if (nextConversationId) setConversationId(nextConversationId);
@@ -126,8 +172,17 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
           <input className="mt-1 w-full rounded border p-2" value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)} placeholder={t.prompt} />
         </label>
       </div>
-      <textarea className="min-h-24 rounded border p-3" dir={locale === "ar" ? "rtl" : "ltr"} value={fileText} onChange={(e) => setFileText(e.target.value)} placeholder={t.upload} />
+      {mode === "contract_analysis" && (
+        <div className="space-y-2 rounded border p-3">
+          <label className="text-sm font-medium">{t.upload}</label>
+          <input type="file" accept=".pdf,application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
+          {pdfFile ? <p className="text-xs text-slate-600">{pdfFile.name}</p> : null}
+          <Button onClick={uploadPdf} disabled={!pdfFile || uploadingPdf}>{uploadingPdf ? t.uploading : t.uploadButton}</Button>
+          <textarea className="min-h-24 w-full rounded border p-3" dir={locale === "ar" ? "rtl" : "ltr"} value={fileText} onChange={(e) => setFileText(e.target.value)} placeholder={t.uploadHint} />
+        </div>
+      )}
       <textarea className="min-h-32 rounded border p-3" dir={locale === "ar" ? "rtl" : "ltr"} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t.placeholder} />
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <div className="flex gap-2">
         <Button onClick={send} disabled={loading}>{loading ? t.loading : t.send}</Button>
       </div>
@@ -137,6 +192,7 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
           <h3 className="text-sm font-semibold">{t.quick}</h3>
           {t.suggestions.map((s) => <button key={s} className="block text-left text-xs text-slate-700" onClick={() => setMessage(s)}>{s}</button>)}
           <h3 className="pt-2 text-sm font-semibold">{t.history}</h3>
+          {history.length === 0 ? <p className="text-xs text-slate-500">{t.noConversations}</p> : null}
           {history.slice(0, 6).map((c) => <button key={c.id} className="block text-left text-xs text-slate-600" onClick={() => { setConversationId(c.id); setMode((c.category as (typeof MODES)[number]) || "general_legal_consultation"); setJurisdiction(c.jurisdiction ?? ""); setResponse(c.messages.map((m) => `${m.role}: ${m.content}`).join("\n\n")); }}>{c.title}</button>)}
         </aside>
       </div>
