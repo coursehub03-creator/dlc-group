@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LEGAL_MODES, streamLegalResponse } from "@/lib/ai/chat";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { LEGAL_MODES, type LegalMode, streamLegalResponse } from "@/lib/ai/chat";
+import { buildLegalSystemPrompt } from "@/lib/ai/legal-prompts";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 
@@ -39,8 +41,8 @@ export async function POST(req: NextRequest) {
     if (!message) return NextResponse.json({ error: "Message is required." }, { status: 400 });
 
     const locale = body.locale === "ar" ? "ar" : "en";
-    const category = LEGAL_MODES.includes(body.category as never)
-      ? (body.category as string)
+    const category: LegalMode = LEGAL_MODES.includes(body.category as LegalMode)
+      ? (body.category as LegalMode)
       : "general_legal_consultation";
 
     const jurisdiction = body.jurisdiction?.trim() || null;
@@ -66,6 +68,25 @@ export async function POST(req: NextRequest) {
       await prisma.aIConversation.update({ where: { id: conversation.id }, data: { category } });
     }
 
+    const previousMessages = await prisma.aIMessage.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: "asc" },
+    });
+    const currentUserContent = body.fileText
+      ? `${message}\n\n[Uploaded contract/document extracted text]\n${body.fileText.slice(0, 20000)}`
+      : message;
+    const chatMessages: ChatCompletionMessageParam[] = [
+      { role: "system", content: buildLegalSystemPrompt({ locale, mode: category, jurisdiction: jurisdiction ?? undefined }) },
+      ...previousMessages.map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content,
+      }) satisfies ChatCompletionMessageParam),
+      {
+        role: "user",
+        content: currentUserContent,
+      },
+    ];
+
     await prisma.aIMessage.create({
       data: {
         conversationId: conversation.id,
@@ -76,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     let stream;
     try {
-      stream = await streamLegalResponse({ message, category, locale, jurisdiction: jurisdiction ?? undefined, fileText: body.fileText });
+      stream = await streamLegalResponse({ messages: chatMessages, category, locale, jurisdiction: jurisdiction ?? undefined });
     } catch (error: unknown) {
       console.error("[ai-chat] failed", error);
       const status = typeof error === "object" && error !== null && "status" in error ? Number((error as { status?: number }).status) : undefined;
@@ -113,6 +134,9 @@ export async function POST(req: NextRequest) {
             const friendlyMessage = "AI service is temporarily unavailable. Please try again later.";
             fullAssistantReply += friendlyMessage;
             controller.enqueue(encoder.encode(friendlyMessage));
+            await prisma.aIMessage.create({
+              data: { conversationId: conversation.id, role: "assistant", content: fullAssistantReply },
+            });
             controller.close();
             return;
           }

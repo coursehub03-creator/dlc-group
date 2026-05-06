@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type Locale = "ar" | "en";
+type ChatRole = "user" | "assistant";
+type ChatMessage = { role: ChatRole; content: string };
 
 type Conversation = {
   id: string;
   title: string;
   category: string;
   jurisdiction: string | null;
-  messages: { role: string; content: string }[];
+  messages: ChatMessage[];
 };
 
 const MODES = [
@@ -64,6 +66,8 @@ const chatCopy = {
     history: "Saved consultations",
     quick: "Quick prompts",
     placeholder: "Describe your legal matter with facts, dates, and documents...",
+    emptyChat: "Start a conversation with the AI legal assistant. Your messages will stay in this chat.",
+    newChat: "New chat",
     suggestions: [
       "Analyze this contract and highlight risks.",
       "Draft an NDA under UAE law.",
@@ -76,7 +80,7 @@ const chatCopy = {
     send: "إرسال",
     loading: "جارٍ الكتابة...",
     disclaimer: "هذه معلومات قانونية عامة وليست بديلاً عن استشارة محامٍ مرخّص.",
-    prompt: "Which country or jurisdiction does this matter relate to?",
+    prompt: "ما الدولة أو الاختصاص القضائي المرتبط بهذه المسألة؟",
     jurisdiction: "الدولة/الاختصاص",
     mode: "النمط",
     upload: "رفع عقد PDF",
@@ -88,6 +92,8 @@ const chatCopy = {
     history: "الاستشارات المحفوظة",
     quick: "اقتراحات سريعة",
     placeholder: "اشرح المسألة القانونية مع الوقائع والتواريخ والمستندات...",
+    emptyChat: "ابدأ محادثة مع المساعد القانوني. ستبقى رسائلك محفوظة في هذه المحادثة.",
+    newChat: "محادثة جديدة",
     suggestions: [
       "حلّل هذا العقد وحدد المخاطر.",
       "صِغ اتفاقية عدم إفصاح وفق قانون دولة محددة.",
@@ -101,7 +107,7 @@ const chatCopy = {
 export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
   const t = useMemo(() => chatCopy[locale], [locale]);
   const [message, setMessage] = useState("");
-  const [response, setResponse] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [mode, setMode] = useState<(typeof MODES)[number]>("general_legal_consultation");
@@ -111,13 +117,22 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
   const [error, setError] = useState("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  const refreshHistory = useCallback(() => {
     fetch("/api/ai/conversations")
       .then((r) => r.json())
       .then((d) => setHistory(d.conversations ?? []))
       .catch(() => setHistory([]));
-  }, [response]);
+  }, []);
+
+  useEffect(() => {
+    refreshHistory();
+  }, [refreshHistory]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chatMessages, loading]);
 
   const uploadPdf = async () => {
     if (!pdfFile) return;
@@ -145,37 +160,64 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
   };
 
   const send = async () => {
-    if (!message.trim()) return;
+    const outgoingMessage = message.trim();
+    if (!outgoingMessage || loading) return;
+
     setLoading(true);
-    setResponse("");
     setError("");
-    const res = await fetch("/api/ai/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, category: mode, locale, jurisdiction, conversationId, fileText }),
-    });
+    setMessage("");
+    setChatMessages((items) => [...items, { role: "user", content: outgoingMessage }, { role: "assistant", content: "" }]);
 
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      setError(payload.error || t.chatError);
-      setLoading(false);
-      return;
-    }
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: outgoingMessage, category: mode, locale, jurisdiction, conversationId, fileText }),
+      });
 
-    const nextConversationId = res.headers.get("X-Conversation-Id");
-    if (nextConversationId) setConversationId(nextConversationId);
-
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder();
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setResponse((s) => s + decoder.decode(value));
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        setChatMessages((items) => items.slice(0, -1));
+        setError(payload.error || t.chatError);
+        return;
       }
-    }
 
-    setLoading(false);
+      const nextConversationId = res.headers.get("X-Conversation-Id");
+      if (nextConversationId) setConversationId(nextConversationId);
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          setChatMessages((items) => {
+            const next = [...items];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = { ...last, content: last.content + chunk };
+            }
+            return next;
+          });
+        }
+      }
+
+      refreshHistory();
+    } catch {
+      setChatMessages((items) => items.slice(0, -1));
+      setError(t.chatError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startNewChat = () => {
+    setConversationId(null);
+    setChatMessages([]);
+    setMessage("");
+    setError("");
+    setFileText("");
   };
 
   return (
@@ -204,19 +246,48 @@ export function AssistantChat({ locale = "en" }: { locale?: Locale }) {
           <textarea className="min-h-24 w-full rounded border p-3" dir={locale === "ar" ? "rtl" : "ltr"} value={fileText} onChange={(e) => setFileText(e.target.value)} placeholder={t.uploadHint} />
         </div>
       )}
-      <textarea className="min-h-32 rounded border p-3" dir={locale === "ar" ? "rtl" : "ltr"} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t.placeholder} />
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <div className="flex gap-2">
-        <Button onClick={send} disabled={loading}>{loading ? t.loading : t.send}</Button>
-      </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <article className="min-h-20 whitespace-pre-wrap rounded border p-3 text-sm md:col-span-2" dir={locale === "ar" ? "rtl" : "ltr"}>{response || t.prompt}</article>
+        <div className="md:col-span-2">
+          <div className="flex h-[28rem] flex-col gap-3 overflow-y-auto rounded border bg-slate-50 p-3" dir={locale === "ar" ? "rtl" : "ltr"}>
+            {chatMessages.length === 0 ? <p className="m-auto max-w-sm text-center text-sm text-slate-500">{t.emptyChat}</p> : null}
+            {chatMessages.map((item, index) => (
+              <div key={`${item.role}-${index}`} className={`flex ${item.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm shadow-sm ${item.role === "user" ? "bg-slate-900 text-white" : "border bg-white text-slate-800"}`}>
+                  {item.content || (item.role === "assistant" && loading ? t.loading : "")}
+                </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="mt-3 grid gap-2">
+            <textarea className="min-h-28 rounded border p-3" dir={locale === "ar" ? "rtl" : "ltr"} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t.placeholder} />
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <div className="flex gap-2">
+              <Button onClick={send} disabled={loading || !message.trim()}>{loading ? t.loading : t.send}</Button>
+              <Button type="button" className="bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50" onClick={startNewChat} disabled={loading}>{t.newChat}</Button>
+            </div>
+          </div>
+        </div>
         <aside className="space-y-3 rounded border p-3">
           <h3 className="text-sm font-semibold">{t.quick}</h3>
           {t.suggestions.map((s) => <button key={s} className="block text-left text-xs text-slate-700" onClick={() => setMessage(s)}>{s}</button>)}
           <h3 className="pt-2 text-sm font-semibold">{t.history}</h3>
           {history.length === 0 ? <p className="text-xs text-slate-500">{t.noConversations}</p> : null}
-          {history.slice(0, 6).map((c) => <button key={c.id} className="block text-left text-xs text-slate-600" onClick={() => { setConversationId(c.id); setMode((c.category as (typeof MODES)[number]) || "general_legal_consultation"); setJurisdiction(c.jurisdiction ?? ""); setResponse(c.messages.map((m) => `${m.role}: ${m.content}`).join("\n\n")); }}>{c.title}</button>)}
+          {history.slice(0, 6).map((c) => (
+            <button
+              key={c.id}
+              className="block text-left text-xs text-slate-600"
+              onClick={() => {
+                setConversationId(c.id);
+                setMode((c.category as (typeof MODES)[number]) || "general_legal_consultation");
+                setJurisdiction(c.jurisdiction ?? "");
+                setChatMessages(c.messages.filter((m) => m.role === "user" || m.role === "assistant"));
+                setError("");
+              }}
+            >
+              {c.title}
+            </button>
+          ))}
         </aside>
       </div>
     </section>

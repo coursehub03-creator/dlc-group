@@ -1,17 +1,20 @@
 import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { buildLegalSystemPrompt } from "@/lib/ai/legal-prompts";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: OPENROUTER_BASE_URL,
-  defaultHeaders: {
-    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    "HTTP-Referer": "https://dlcgroup.online",
-    "X-Title": "DLC Legal AI",
-  },
-});
+function createOpenRouterClient(apiKey: string) {
+  return new OpenAI({
+    apiKey,
+    baseURL: OPENROUTER_BASE_URL,
+    defaultHeaders: {
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://dlcgroup.online",
+      "X-Title": "DLC Legal AI",
+    },
+  });
+}
 
 export const LEGAL_MODES = [
   "general_legal_consultation",
@@ -27,7 +30,8 @@ export const LEGAL_MODES = [
 export type LegalMode = (typeof LEGAL_MODES)[number];
 
 type StreamLegalResponseInput = {
-  message: string;
+  message?: string;
+  messages?: ChatCompletionMessageParam[];
   category?: string;
   locale?: "ar" | "en";
   jurisdiction?: string;
@@ -36,6 +40,7 @@ type StreamLegalResponseInput = {
 
 export async function streamLegalResponse({
   message,
+  messages,
   category = "general_legal_consultation",
   locale = "en",
   jurisdiction,
@@ -48,17 +53,22 @@ export async function streamLegalResponse({
 
   const safeMode = LEGAL_MODES.includes(category as LegalMode) ? (category as LegalMode) : "general_legal_consultation";
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.AI_MODEL || "openai/gpt-4o-mini",
-    messages: [
+  const currentUserContent = fileText
+    ? `${message ?? ""}\n\n[Uploaded contract/document extracted text]\n${fileText.slice(0, 20000)}`
+    : message;
+  const chatMessages =
+    messages ??
+    ([
       { role: "system", content: buildLegalSystemPrompt({ locale, mode: safeMode, jurisdiction }) },
       {
         role: "user",
-        content: fileText
-          ? `${message}\n\n[Uploaded contract/document extracted text]\n${fileText.slice(0, 20000)}`
-          : message,
+        content: currentUserContent ?? "",
       },
-    ],
+    ] satisfies ChatCompletionMessageParam[]);
+
+  const completion = await createOpenRouterClient(apiKey).chat.completions.create({
+    model: process.env.AI_MODEL || "openai/gpt-4o-mini",
+    messages: chatMessages,
     stream: true,
   });
 
