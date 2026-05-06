@@ -12,6 +12,7 @@ type PromptContext = {
   locale: "ar" | "en";
   mode: LegalMode;
   jurisdiction?: string;
+  summary?: string;
 };
 
 const MODE_GUIDANCE_EN: Record<LegalMode, string> = {
@@ -52,16 +53,21 @@ const MODE_GUIDANCE_AR: Record<LegalMode, string> = {
     "مراقبة الشركات: اشرح نطاق المراقبة النظامية، الفحوصات الدورية، مؤشرات الامتثال والمخاطر، ومسارات التصعيد مع مراعاة الاختصاص.",
 };
 
-export function buildLegalSystemPrompt({ locale, mode, jurisdiction }: PromptContext) {
+export function buildLegalSystemPrompt({ locale, mode, jurisdiction, summary }: PromptContext) {
   const jurisdictionText = jurisdiction?.trim() || (locale === "ar" ? "غير محدد" : "not provided");
   const modeGuidance = locale === "ar" ? MODE_GUIDANCE_AR[mode] : MODE_GUIDANCE_EN[mode];
+  const memoryText = summary?.trim()
+    ? locale === "ar"
+      ? `\nملخص ذاكرة المحادثة السابقة: ${summary.trim().slice(0, 8000)}`
+      : `\nPrior conversation memory summary: ${summary.trim().slice(0, 8000)}`
+    : "";
 
   if (locale === "ar") {
     return `أنت محرك ذكاء قانوني احترافي لمنصة SaaS قانونية متميزة.
 النمط: مهني، دقيق، واضح، عملي، ومتوازن.
 الوضع القانوني الحالي: ${mode}.
 الاختصاص القضائي: ${jurisdictionText}.
-توجيه خاص بالوضع: ${modeGuidance}
+توجيه خاص بالوضع: ${modeGuidance}${memoryText}
 
 قواعد إلزامية:
 1) ابدأ بالتحقق من الاختصاص القضائي؛ وإذا لم يُذكر، اسأل حرفياً: "Which country or jurisdiction does this matter relate to?"
@@ -74,9 +80,9 @@ export function buildLegalSystemPrompt({ locale, mode, jurisdiction }: PromptCon
 صيغة الإخراج الإلزامية عندما تتوفر معلومات كافية:
 - Summary
 - Jurisdiction
-- Legal issue
-- Key facts needed
-- Legal analysis
+- Key facts understood
+- Missing information/questions
+- Preliminary legal analysis
 - Risks
 - Recommended next steps
 - Disclaimer
@@ -93,7 +99,7 @@ export function buildLegalSystemPrompt({ locale, mode, jurisdiction }: PromptCon
 Style: professional legal consultant tone, precise, practical, and balanced.
 Current legal mode: ${mode}.
 Jurisdiction context: ${jurisdictionText}.
-Mode-specific guidance: ${modeGuidance}
+Mode-specific guidance: ${modeGuidance}${memoryText}
 
 Mandatory rules:
 1) Always verify jurisdiction first; if missing, ask exactly: "Which country or jurisdiction does this matter relate to?"
@@ -106,9 +112,9 @@ Mandatory rules:
 Required structured output when sufficient facts are provided:
 - Summary
 - Jurisdiction
-- Legal issue
-- Key facts needed
-- Legal analysis
+- Key facts understood
+- Missing information/questions
+- Preliminary legal analysis
 - Risks
 - Recommended next steps
 - Disclaimer

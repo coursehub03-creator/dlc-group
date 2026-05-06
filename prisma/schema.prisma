@@ -81,6 +81,7 @@ model User {
   serviceRequests   ServiceRequest[]
   legalRequests     LegalRequest[]
   aiConversations   AIConversation[]
+  aiFiles           AIFile[]
   notifications     Notification[]
   sentNotifications Notification[]   @relation("NotificationSender")
   createdAt         DateTime         @default(now())
@@ -314,9 +315,12 @@ model AIConversation {
   userId       String
   title        String
   category     String
+  mode         String?
   jurisdiction String?
+  summary      String?
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages     AIMessage[]
+  files        AIFile[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 }
@@ -328,6 +332,24 @@ model AIMessage {
   content        String
   conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model AIFile {
+  id             String         @id @default(cuid())
+  conversationId String
+  userId         String
+  filename       String
+  mimeType       String
+  size           Int
+  extractedText  String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model ContactInquiry {
